@@ -17,6 +17,8 @@ Rarely used skills leave every folder a host scans, so their descriptions cost n
 | soft (`--soft`) | Claude Code only: `skillOverrides` "off"; the folder stays | removes the override |
 | plugin (`--plugin NAME`) | sets `enabledPlugins` false (backup kept) and indexes the plugin's skills at their cache path | re-enables the plugin |
 
+Aliases: other hosts often reach the same folder through their own link (a junction `~/.agents/skills/<name>` pointing at `~/.claude/skills/<name>`, used by Codex). In move and link mode `park` finds every link in any known skill root (all hosts, user and project) that resolves to the skill's folder (or the link's target), records it in the entry as `aliases`, and removes it, never its target, so nothing is left dangling. `unpark` recreates each alias as a link to the restored folder. For a skill parked before aliases were recorded, whose links were removed by hand, record them with `parked alias NAME PATH` so `unpark` brings them back. `parked doctor` also reports any link in a skill root that points at a missing folder or into the lot.
+
 Plugin skills are never moved or edited: the cache is overwritten on update and its path changes with the version. `parked doctor` reports paths that moved.
 
 ## How the agent uses a parked skill

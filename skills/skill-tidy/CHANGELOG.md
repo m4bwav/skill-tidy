@@ -4,6 +4,11 @@ Every change to [SKILL.md](SKILL.md) and its companions, newest first, each with
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:` (IDs or "user request"), `files:` (file and section), and a sentence on what changed. Cite section headings, not line numbers.
 
+### C-20260926-5 · 2026-09-26 · Park removes and unpark restores alias links; doctor finds dangling links; parked alias (v0.2.2)
+- because: user request (parking a real folder left other hosts' junctions to it dangling, and unpark did not bring them back)
+- files: scripts/tidy.py (link_roots, find_aliases, dangling_links, add_alias; park, unpark, parked_doctor, parked alias), references/parking.md (Modes), ../../tests/test_tidy.py (TestParking), versions
+- park in move and link mode scans every known skill root of every host for links resolving to the skill's folder, records them as `aliases` and removes them (never the target); unpark recreates them as links to the restored origin. `parked doctor` reports links pointing at missing folders or into the lot, and `parked alias NAME PATH` records aliases on entries parked before this.
+
 ### C-20260926-4 · 2026-09-26 · is_link fix for macOS and Windows runners, two lint false positives (v0.2.1)
 - because: CI run 36287630807 (macOS and Windows jobs failed); gaps reported by the everlast description clean-up
 - files: scripts/tidy.py (is_link; ST011 ignores quoted user phrases; ST009 accepts 'Use at / before / after / during / while'), ../../tests/test_tidy.py, versions

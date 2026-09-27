@@ -19,7 +19,7 @@ Standard library only (Python 3.8+), Windows, macOS and Linux. Every rule and nu
   python tidy.py split     SKILL --section H --when TEXT [--to F]     move a section to references/, leave "Read F when TEXT."
   python tidy.py park      NAME [--scope user|project] [--soft] [--plugin P] [--group G]   park out of every scanned root
   python tidy.py unpark    NAME [--scope ...]                         put it back
-  python tidy.py parked    [list|index|doctor|suggest]                the parking lot and its index in the instruction files
+  python tidy.py parked    [list|index|doctor|suggest|alias N P]  the parking lot and its index in the instruction files
   python tidy.py version
 
 A = claude (default) | codex | copilot | cursor | all.
@@ -35,7 +35,7 @@ import shutil
 import sys
 import time
 
-VERSION = "0.2.1"
+VERSION = "0.2.2"
 HERE = os.path.dirname(os.path.abspath(__file__))
 NL = chr(10)
 AGENTS = ["claude", "codex", "copilot", "cursor", "all"]
@@ -690,6 +690,59 @@ def remove_link(p):
         os.rmdir(p)  # a junction is removed as an empty directory; its target is untouched
 
 
+def link_roots(project=None):
+    """Every folder a host may keep skill links in: the roots of all hosts plus the Codex, Copilot and Cursor
+    folders and their project equivalents. Aliases (other links to a parked folder) are looked for here."""
+    h = home()
+    j = os.path.join
+    dirs = [os.path.dirname(os.path.dirname(g)) for _, p, g in roots_for("all", project) if not p]
+    dirs += [j(h, ".agents", "skills"), j(h, ".codex", "skills"), j(h, ".copilot", "skills"), j(h, ".cursor", "skills")]
+    if project:
+        dirs += [j(project, d, "skills") for d in (".claude", ".agents", ".codex", ".copilot", ".github", ".cursor")]
+    out, seen = [], set()
+    for d in dirs:
+        if _norm_dir(d) not in seen:
+            seen.add(_norm_dir(d))
+            out.append(d)
+    return out
+
+
+def _entries(project=None):
+    for r in link_roots(project):
+        try:
+            names = sorted(os.listdir(r))
+        except OSError:
+            continue
+        for n in names:
+            yield os.path.join(r, n)
+
+
+def find_aliases(target, project=None, exclude=()):
+    """Links in any skill root whose resolved target is `target`."""
+    want = _norm_dir(os.path.realpath(target))
+    skip = {_norm_dir(x) for x in exclude}
+    return [p for p in _entries(project)
+            if _norm_dir(p) not in skip and is_link(p) and _norm_dir(os.path.realpath(p)) == want]
+
+
+def dangling_links(project=None, lot=None):
+    """Links in any skill root that point at a missing folder or into the parking lot."""
+    lot_n = _norm_dir(lot) if lot else None
+    out = []
+    for p in _entries(project):
+        if not os.path.exists(p):  # a broken symlink or junction: listed, but nothing behind it
+            out.append((p, "points at a missing folder"))
+            continue
+        if not is_link(p):
+            continue
+        real = os.path.realpath(p)
+        if not os.path.isdir(real):
+            out.append((p, "points at a missing folder"))
+        elif lot_n and _norm_dir(real).startswith(lot_n + os.sep):
+            out.append((p, "points into the parking lot"))
+    return out
+
+
 def index_line(name, desc, max_len=150):
     """One routing line: the description's first sentence, which the rules ask to carry the key use case and
     its trigger words (ST014), with bracketed asides dropped and cut at a word boundary. The 'Use when' clause
@@ -732,14 +785,21 @@ def park(name, scope="user", project=None, group=None, line=None, soft=False, sk
         entry["path"] = src
     elif is_link(src):
         entry.update({"mode": "link", "path": os.path.realpath(src)})
+        entry["aliases"] = find_aliases(entry["path"], project, exclude=[src])
+        for al in entry["aliases"]:
+            remove_link(al)
         remove_link(src)
     else:
         dest = os.path.join(park_dir(scope, project), s["name"])
         if os.path.exists(dest):
             raise ValueError("%s already exists in the parking lot" % dest)
+        aliases = find_aliases(src, project, exclude=[src])
         os.makedirs(os.path.dirname(dest), exist_ok=True)
+        for al in aliases:
+            remove_link(al)  # other hosts' links to this folder would dangle once it moves
         shutil.move(src, dest)
         entry["path"] = dest
+        entry["aliases"] = aliases
     m[s["name"]] = entry
     save_manifest(scope, project, m)
     return entry
@@ -811,6 +871,12 @@ def unpark(name, scope="user", project=None):
     else:
         os.makedirs(os.path.dirname(e["origin"]), exist_ok=True)
         shutil.move(e["path"], e["origin"])
+    if e["mode"] in ("move", "link"):
+        for al in e.get("aliases") or []:
+            if os.path.lexists(al) or is_link(al):
+                continue
+            os.makedirs(os.path.dirname(al), exist_ok=True)
+            make_link(e["origin"], al)
     m.pop(name)
     save_manifest(scope, project, m)
     return e
@@ -929,7 +995,28 @@ def parked_doctor(scope, project=None):
             probs.append("%s: also active in a scanned root (duplicate)" % nm)
         if e.get("features"):
             probs.append("%s: uses %s; the index marks it (unpark)" % (nm, ", ".join(e["features"])))
+    for p, why in dangling_links(project, park_dir(scope, project)):
+        probs.append("dangling link %s %s; remove it, or record it with `parked alias NAME %s` and remove it" % (p, why, p))
     return probs
+
+
+def add_alias(name, path, scope="user", project=None):
+    """Record an alias link path on a parked entry so unpark recreates it (for skills parked before aliases
+    were recorded, whose links were removed by hand)."""
+    m = load_manifest(scope, project)
+    e = m.get(name)
+    if not e:
+        raise ValueError("%s is not parked (%s)" % (name, manifest_path(scope, project)))
+    if e["mode"] not in ("move", "link"):
+        raise ValueError("%s is a %s entry; aliases apply to moved or linked skills" % (name, e["mode"]))
+    path = os.path.abspath(path)
+    if _norm_dir(path) == _norm_dir(e["origin"]):
+        raise ValueError("%s is the origin itself" % path)
+    al = e.setdefault("aliases", [])
+    if _norm_dir(path) not in {_norm_dir(x) for x in al}:
+        al.append(path)
+    save_manifest(scope, project, m)
+    return e
 
 
 def cmd_park(a):
@@ -976,6 +1063,16 @@ def cmd_parked(a):
     elif a.action == "doctor":
         probs = parked_doctor(a.scope, project)
         out(probs, a.json, ["%d parked, %d notes" % (len(m), len(probs))] + ["  " + p for p in probs])
+    elif a.action == "alias":
+        if len(a.args) != 2:
+            print("usage: parked alias NAME PATH")
+            return 2
+        try:
+            e = add_alias(a.args[0], a.args[1], a.scope, project)
+        except ValueError as ex:
+            print("refused: %s" % ex)
+            return 1
+        print("%s aliases: %s (unpark recreates them as links to %s)" % (e["name"], ", ".join(e["aliases"]), e["origin"]))
     elif a.action == "suggest":
         c = usage(a.days)
         sk = [s for s in listed(scan("claude", project)) if c.get(s["name"], 0) == 0 and s["name"] not in m]
@@ -988,6 +1085,8 @@ def cmd_parked(a):
         lines = ["%d parked (%s): %s" % (len(m), a.scope, manifest_path(a.scope, project))]
         for nm, e in sorted(m.items()):
             lines.append("  %-36s %-6s %s" % (nm, e["mode"], e["path"]))
+            for al in e.get("aliases") or []:
+                lines.append("  %-36s %-6s %s" % ("", "alias", al))
         out(m, a.json, lines)
     return 0
 
@@ -1618,8 +1717,9 @@ def main(argv=None):
     p.add_argument("name")
     p.add_argument("--scope", default="user", choices=["user", "project"])
     p.set_defaults(fn=cmd_unpark)
-    p = common(sp.add_parser("parked", help="the parking lot: list | index | doctor | suggest"))
-    p.add_argument("action", nargs="?", default="list", choices=["list", "index", "doctor", "suggest"])
+    p = common(sp.add_parser("parked", help="the parking lot: list | index | doctor | suggest | alias NAME PATH"))
+    p.add_argument("action", nargs="?", default="list", choices=["list", "index", "doctor", "suggest", "alias"])
+    p.add_argument("args", nargs="*", help="alias: NAME PATH, a link unpark should recreate")
     p.add_argument("--scope", default="user", choices=["user", "project"])
     p.add_argument("--days", type=int, default=30)
     p.set_defaults(fn=cmd_parked)
