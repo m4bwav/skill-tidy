@@ -30,7 +30,7 @@ import shutil
 import sys
 import time
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 HERE = os.path.dirname(os.path.abspath(__file__))
 NL = chr(10)
 AGENTS = ["claude", "codex", "copilot", "cursor", "all"]
@@ -38,6 +38,16 @@ AGENTS = ["claude", "codex", "copilot", "cursor", "all"]
 
 def home():
     return os.environ.get("SKILLTIDY_HOME") or os.path.expanduser("~")  # tests point this at a temp folder
+
+
+def claude_dir():
+    """Claude Code's config folder: CLAUDE_CONFIG_DIR when set (it moves settings, plugins, projects and
+    .claude.json together), otherwise ~/.claude. Found by the eval run, which sets it."""
+    return os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(home(), ".claude")
+
+
+def claude_json():
+    return os.path.join(os.environ["CLAUDE_CONFIG_DIR"], ".claude.json") if os.environ.get("CLAUDE_CONFIG_DIR") else os.path.join(home(), ".claude.json")
 
 
 def state_dir():
@@ -144,8 +154,8 @@ def claude_plugin_roots(project=None):
     """Installed and enabled Claude Code plugins (installed_plugins.json, version 2 shape): user scope, and
     project scope for this project. Returns [(plugin, skills_glob)]."""
     h = home()
-    reg = read_json(os.path.join(h, ".claude", "plugins", "installed_plugins.json"), {}) or {}
-    enabled = (read_json(os.path.join(h, ".claude", "settings.json"), {}) or {}).get("enabledPlugins") or {}
+    reg = read_json(os.path.join(claude_dir(), "plugins", "installed_plugins.json"), {}) or {}
+    enabled = (read_json(os.path.join(claude_dir(), "settings.json"), {}) or {}).get("enabledPlugins") or {}
     proj = _norm_dir(project)
     out = []
     plugins = reg.get("plugins") if isinstance(reg.get("plugins"), dict) else {}
@@ -168,9 +178,9 @@ def roots_for(agent, project=None):
     h = home()
     j = os.path.join
     per = {
-        "claude": [j(h, ".claude", "skills")] + ([j(project, ".claude", "skills")] if project else []),
+        "claude": [j(claude_dir(), "skills")] + ([j(project, ".claude", "skills")] if project else []),
         "codex": [j(h, ".agents", "skills"), j(h, ".codex", "skills")] + ([j(project, ".agents", "skills")] if project else []),
-        "copilot": [j(h, ".copilot", "skills"), j(h, ".claude", "skills"), j(h, ".agents", "skills")]
+        "copilot": [j(h, ".copilot", "skills"), j(claude_dir(), "skills"), j(h, ".agents", "skills")]
         + ([j(project, ".github", "skills"), j(project, ".claude", "skills"), j(project, ".agents", "skills")] if project else []),
         "cursor": [j(h, ".cursor", "skills")] + ([j(project, ".cursor", "skills"), j(project, ".agents", "skills")] if project else []),
     }
@@ -185,7 +195,7 @@ def roots_for(agent, project=None):
 
 
 def skill_overrides():
-    s = read_json(os.path.join(home(), ".claude", "settings.json"), {}) or {}
+    s = read_json(os.path.join(claude_dir(), "settings.json"), {}) or {}
     o = s.get("skillOverrides")
     return o if isinstance(o, dict) else {}
 
@@ -460,7 +470,7 @@ def claude_events(days):
     """Yield (session, kind, value, text) from Claude Code transcripts: ('prompt', None, text),
     ('skill', name, None) for a Skill tool call, ('command', name, None) for a typed slash command.
     The JSONL format is internal and unstable; unknown lines are skipped."""
-    for f in _recent(os.path.join(home(), ".claude", "projects", "**", "*.jsonl"), days):
+    for f in _recent(os.path.join(claude_dir(), "projects", "**", "*.jsonl"), days):
         sid = os.path.basename(f)
         try:
             fh = open(f, "r", encoding="utf-8", errors="replace")
@@ -514,7 +524,7 @@ IMPORT_RE = re.compile(r"(?m)^\s*@([^\s]+)")
 def instruction_chain(project):
     """Instruction files Claude Code loads at startup, following @imports (depth 5), with sizes."""
     h = home()
-    starts = [os.path.join(h, ".claude", "CLAUDE.md")]
+    starts = [os.path.join(claude_dir(), "CLAUDE.md")]
     if project:
         d, chain = os.path.abspath(project), []
         while True:  # Claude Code loads CLAUDE.md files from the working directory up to the root
@@ -546,7 +556,7 @@ def instruction_chain(project):
         walk(p, 0, None)
     if project:
         slug = re.sub(r"[^A-Za-z0-9]", "-", os.path.abspath(project))
-        mem = os.path.join(h, ".claude", "projects", slug, "memory", "MEMORY.md")
+        mem = os.path.join(claude_dir(), "projects", slug, "memory", "MEMORY.md")
         if os.path.isfile(mem):
             t = read_text(mem)
             first = NL.join(t.splitlines()[:200])[:25000]
@@ -556,13 +566,13 @@ def instruction_chain(project):
 
 def mcp_settings(project):
     h = home()
-    cfg = read_json(os.path.join(h, ".claude.json"), {}) or {}
+    cfg = read_json(claude_json(), {}) or {}
     servers = dict(cfg.get("mcpServers") or {})
     if project:
         servers.update((read_json(os.path.join(project, ".mcp.json"), {}) or {}).get("mcpServers") or {})
         pc = (cfg.get("projects") or {}).get(os.path.abspath(project).replace(os.sep, "/")) or {}
         servers.update(pc.get("mcpServers") or {})
-    settings = read_json(os.path.join(h, ".claude", "settings.json"), {}) or {}
+    settings = read_json(os.path.join(claude_dir(), "settings.json"), {}) or {}
     env = settings.get("env") or {}
     return {
         "servers": sorted(servers), "always_load": sorted(n for n, s in servers.items() if isinstance(s, dict) and s.get("alwaysLoad")),
@@ -612,7 +622,7 @@ def set_description(path, new_desc):
 
 def merge_skill_overrides(entries):
     """Merge {name: state} into ~/.claude/settings.json skillOverrides, with a backup. Never touches other keys."""
-    p = os.path.join(home(), ".claude", "settings.json")
+    p = os.path.join(claude_dir(), "settings.json")
     cur = read_json(p, None)
     if cur is None and os.path.exists(p):
         raise ValueError("%s is not valid JSON; refusing to rewrite it" % p)

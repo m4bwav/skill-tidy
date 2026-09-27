@@ -36,7 +36,7 @@
   ],
   "counts": {
     "learnings": 0,
-    "changes": 0,
+    "changes": 1,
     "research": 0,
     "tests": 2
   },
@@ -51,5 +51,6 @@
     "failing": [],
     "last_failure": null,
     "research_after_days": null
-  }
+  },
+  "version": "0.1.1"
 }

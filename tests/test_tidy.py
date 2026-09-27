@@ -43,6 +43,7 @@ class Base(unittest.TestCase):
         self.home = os.path.join(self.tmp, "home")
         os.environ["SKILLTIDY_HOME"] = self.home
         os.environ["SKILLTIDY_STATE"] = os.path.join(self.tmp, "state")
+        os.environ.pop("CLAUDE_CONFIG_DIR", None)
         self.user = os.path.join(self.home, ".claude", "skills")
         self.proj = os.path.join(self.tmp, "proj")
         os.makedirs(self.proj)
@@ -219,6 +220,23 @@ class TestUsageBudgetOffload(Base):
         self.assertIn("One-rewrite brief", brief)
         self.assertIn("what is new in databases this week", brief)  # matched a trigger, skill not invoked
         self.assertIn("radar-sweep", brief)
+
+
+class TestConfigDir(Base):
+    def test_claude_config_dir_moves_every_claude_path(self):
+        cfg = os.path.join(self.tmp, "altcfg")
+        os.environ["CLAUDE_CONFIG_DIR"] = cfg
+        try:
+            skill(os.path.join(cfg, "skills"), "painter", PAINT)
+            skill(self.user, "ignored", FEED)  # ~/.claude is not read when the variable is set
+            write(os.path.join(cfg, "settings.json"), json.dumps({"skillOverrides": {"painter": "name-only"}}))
+            sk = tidy.scan("claude", self.proj)
+            self.assertEqual([s["id"] for s in sk], ["painter"])
+            self.assertEqual(sk[0]["listed_chars"], len("painter"))
+            write(os.path.join(cfg, ".claude.json"), json.dumps({"mcpServers": {"x": {"alwaysLoad": True}}}))
+            self.assertEqual(tidy.mcp_settings(self.proj)["always_load"], ["x"])
+        finally:
+            del os.environ["CLAUDE_CONFIG_DIR"]
 
 
 class TestStartup(Base):

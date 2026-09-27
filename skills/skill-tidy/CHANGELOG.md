@@ -4,6 +4,11 @@ Every change to [SKILL.md](SKILL.md) and its companions, newest first, each with
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:` (IDs or "user request"), `files:` (file and section), and a sentence on what changed. Cite section headings, not line numbers.
 
+### C-20260926-2 · 2026-09-26 · Honour CLAUDE_CONFIG_DIR (v0.1.1)
+- because: T-20260926-2 (action-1 found 0 skills: the eval harness moves Claude Code's config with CLAUDE_CONFIG_DIR)
+- files: scripts/tidy.py (claude_dir, claude_json; every Claude Code path), ../../tests/test_tidy.py (TestConfigDir), versions
+- Users with a custom Claude Code config folder saw an empty catalog, no usage and no settings; every Claude Code path now follows the variable, as Claude Code does.
+
 ### C-20260926-1 · 2026-09-26 · Created as an evergreen unit
 - because: user request
 - files: SKILL.md, RESEARCH.md, LEARNINGS.md, evergreen.json (skills: also TESTS.md and evals/evals.json)
