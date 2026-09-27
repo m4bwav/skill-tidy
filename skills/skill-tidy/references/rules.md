@@ -23,6 +23,14 @@
 | ST017 | error | `compatibility` over 500 chars | spec |
 | ST018 | info | triggers kept in `when_to_use` | only Claude Code reads it |
 | ST019 | warn | similarity 0.45+ to another listed skill and no boundary sentence | 2601.04748, 2605.24050, 2606.10388; the threshold is inference (R-20260926-1) |
+| ST020 | warn | body about 1.5K tokens or more with sections that could load on demand (supplementary ones of 250+ tokens, any non-core one of 1K+) | Anthropic authoring guide (progressive disclosure; reference files cost nothing until read); SkillReducer 2603.29919 (over 60% of body text non-actionable; moving it cut 39% and raised quality 2.8%) (R-20260926-3) |
+| ST021 | warn | a reference file links to another markdown file in the skill | Anthropic: keep references one level deep; nested files may be read partially (head -100) |
+| ST022 | info | a reference file over 100 lines with no contents list in its first 40 lines | Anthropic: table of contents for reference files over 100 lines |
+| ST023 | warn | a backslash path (`scripts\x.py`) in SKILL.md | Anthropic: forward slashes work on every platform |
+
+## Body sections (`sections`, `split`)
+
+A section is supplementary when its heading names reference material (examples, templates, tables, per-host or per-platform notes, background, troubleshooting, advanced, variants) or its content is mostly code or a table of 8+ rows; core when its heading names steps, a workflow, rules, usage or the report. Only top-level sections are proposed. `split` moves the section's content (the heading stays), shifts its sub-headings up one level, appends to an existing target as another `##` section, adds a contents list past 100 lines, requires a `--when` condition of three words or more, refuses paths outside the skill folder and installed plugin copies, keeps line endings, and backs SKILL.md up.
 
 ## Similarity
 

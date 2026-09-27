@@ -15,6 +15,11 @@ Standard library only (Python 3.8+), Windows, macOS and Linux. Every rule and nu
   python tidy.py offload   [--days 30] [--write]                      token savings: never-used skills to name-only / off, per host
   python tidy.py startup   [--project P] [--json]                     the always-loaded instruction chain, memory and MCP settings
   python tidy.py harvest   NAME [--days 60]                           missed and doubtful invocations, as a one-rewrite brief
+  python tidy.py sections  SKILL                                      body sections by size and kind; what could load on demand
+  python tidy.py split     SKILL --section H --when TEXT [--to F]     move a section to references/, leave "Read F when TEXT."
+  python tidy.py park      NAME [--scope user|project] [--soft] [--plugin P] [--group G]   park out of every scanned root
+  python tidy.py unpark    NAME [--scope ...]                         put it back
+  python tidy.py parked    [list|index|doctor|suggest]                the parking lot and its index in the instruction files
   python tidy.py version
 
 A = claude (default) | codex | copilot | cursor | all.
@@ -30,7 +35,7 @@ import shutil
 import sys
 import time
 
-VERSION = "0.1.1"
+VERSION = "0.2.0"
 HERE = os.path.dirname(os.path.abspath(__file__))
 NL = chr(10)
 AGENTS = ["claude", "codex", "copilot", "cursor", "all"]
@@ -68,6 +73,10 @@ def read_json(path, default=None):
             return json.load(f)
     except (OSError, ValueError):
         return default
+
+
+def today():
+    return _dt.date.today().isoformat()
 
 
 def est_tokens(chars):
@@ -334,7 +343,7 @@ def max_similarity(skills, sid, override=None):
 def triggers(text):
     """Quoted trigger phrases (straight or curly quotes, 3-80 chars) in the order they appear."""
     out = []
-    for m in re.finditer(r"(?:'([^']{3,80})'|\"([^\"]{3,80})\"|‘([^’]{3,80})’|“([^”]{3,80})”)", text or ""):
+    for m in re.finditer(r"(?:(?<![\w])'([^']{3,80})'(?![\w])|\"([^\"]{3,80})\"|‘([^’]{3,80})’|“([^”]{3,80})”)", text or ""):
         t = next(g for g in m.groups() if g)
         if re.search(r"[a-zA-Z]", t) and t.lower() not in [x.lower() for x in out]:
             out.append(t)
@@ -371,10 +380,11 @@ VAGUE_RE = re.compile(r"\b(helps with|various|stuff|things|and more|etc\.?|gener
 WHEN_RE = re.compile(r"\b(use (it |this skill |this )?(when|whenever|for|to|on|if)|trigger(s|ed)? (when|on)|when the user|invoke when)\b", re.I)
 STEER_RE = re.compile(r"\b(always use this|must (always )?use this|prefer this skill|ignore (other|the other)|highest priority|instead of any other|before any other skill)\b", re.I)
 BOUNDARY_RE = re.compile(r"\b(not for|do not use|don't use|is the sibling|that is [a-z0-9:-]+|use [a-z0-9:-]+ instead|belongs to|, use [a-z0-9]+-[a-z0-9-]+|is (the )?[a-z0-9]+-[a-z0-9-]+( skill)?\b)", re.I)
-QUOTED_RE = re.compile("'[^']{3,80}'|\"[^\"]{3,80}\"|‘[^’]{3,80}’|“[^”]{3,80}”")
+QUOTED_RE = re.compile(r"(?<![\w])'[^']{3,80}'(?![\w])|\"[^\"]{3,80}\"|‘[^’]{3,80}’|“[^”]{3,80}”")
 XML_RE = re.compile(r"<[A-Za-z/][^>]{0,40}>")
 
 SEV = {"error": 3, "warn": 2, "info": 1}
+BODY_RULES = ("ST016", "ST020", "ST021", "ST022", "ST023")  # about the body and its files, not the description
 
 
 def lint_skill(s, catalog=None, sim_threshold=0.45):
@@ -418,6 +428,18 @@ def lint_skill(s, catalog=None, sim_threshold=0.45):
         add(("ST015", "warn", "steering text ('%s'); descriptions should describe, not push selection (arXiv 2609.02035)" % STEER_RE.search(desc).group(0)))
     if s["body_lines"] > 500 or est_tokens(s["body_chars"]) > 5000:
         add(("ST016", "warn", "body is %d lines / ~%s tokens; the spec suggests under 500 lines and 5K tokens, detail in references/" % (s["body_lines"], k(est_tokens(s["body_chars"])))))
+    if os.path.isfile(s["path"]):
+        cands = offload_candidates(s["path"])
+        if cands and est_tokens(s["body_chars"]) >= 1500:
+            add(("ST020", "warn", "body ~%s tokens loads in full on every use; %d section(s) could move to references/ and load only when needed (%s): run `sections`" % (
+                k(est_tokens(s["body_chars"])), len(cands), ", ".join("'%s' ~%s" % (c["heading"], k(c["tokens"])) for c in cands[:3]))))
+        nested, no_toc = reference_problems(os.path.dirname(os.path.abspath(s["path"])))
+        if nested:
+            add(("ST021", "warn", "reference files link to further files (%s); keep references one level deep from SKILL.md, nested ones may be read partially" % ", ".join(nested[:3])))
+        if no_toc:
+            add(("ST022", "info", "reference files over 100 lines without a contents list at the top: %s" % ", ".join(no_toc[:3])))
+        if re.search(r"(?<![\\\w])(scripts|references|reference|assets)\\[\w.-]+", read_text(s["path"])):
+            add(("ST023", "warn", "backslash path in SKILL.md; use forward slashes (they work on every OS)"))
     comp = s["fm"].get("compatibility")
     if isinstance(comp, str) and len(comp) > 500:
         add(("ST017", "error", "compatibility is %d chars (spec max 500)" % len(comp)))
@@ -428,6 +450,537 @@ def lint_skill(s, catalog=None, sim_threshold=0.45):
         if best >= sim_threshold and not BOUNDARY_RE.search(desc):
             add(("ST019", "warn", "description is %.2f similar to %s and has no boundary clause; end with one short 'Not for <their job> (that is %s)'" % (best, who, who.split(":")[-1])))
     return f
+
+
+# ----------------------------------------------------------------------------- body: progressive disclosure
+# Anthropic's authoring guide: SKILL.md is an overview that points to reference files read only when needed
+# (no context cost until read), body under 500 lines, references one level deep, a table of contents in any
+# reference file over 100 lines. SkillReducer (arXiv 2603.29919): over 60% of body text is non-actionable;
+# moving supplementary material into on-demand files cut bodies 39% and raised quality 2.8%.
+
+SUPPLEMENTARY_RE = re.compile(r"\b(examples?|samples?|templates?|reference|appendix|background|troubleshoot\w*|faq|notes?|"
+                              r"per[- ](agent|host|platform|tool)|platforms?|tables?|glossary|schemas?|api|options|flags|"
+                              r"history|details?|advanced|gotchas|caveats|edge cases|variants?|catalog|list of)\b", re.I)
+CORE_RE = re.compile(r"\b(step \d|steps|workflow|procedure|quick ?start|rules?|when to|how to use|usage|report|"
+                     r"important|safety|never|always|do not|overview|checklist)\b", re.I)
+FENCE_RE = re.compile(r"^\s*(```|~~~)")
+LINK_RE = re.compile(r"\]\(([^)#\s]+\.md)(#[^)]*)?\)")
+
+
+def body_of(path):
+    """(front matter lines, body lines) of a SKILL.md, split at the closing ---."""
+    lines = read_text(path).splitlines()
+    if lines and lines[0].lstrip("﻿").strip() == "---":
+        end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+        if end:
+            return lines[:end + 1], lines[end + 1:]
+    return [], lines
+
+
+def sections(body_lines):
+    """Markdown sections by heading (## and deeper; # is the title), ignoring headings inside code fences.
+    Each: heading, level, start/end line in the body, chars, tokens, kind (core | supplementary | mixed), why."""
+    heads, fence = [], False
+    for i, ln in enumerate(body_lines):
+        if FENCE_RE.match(ln):
+            fence = not fence
+            continue
+        m = re.match(r"^(#{2,6})\s+(.*\S)\s*$", ln) if not fence else None
+        if m:
+            heads.append((i, len(m.group(1)), m.group(2)))
+    out = []
+    for n, (i, lvl, title) in enumerate(heads):
+        end = next((j for j, l2, _ in heads[n + 1:] if l2 <= lvl), len(body_lines))
+        chunk = body_lines[i:end]
+        text = NL.join(chunk)
+        code = 0
+        fence = False
+        for ln in chunk:
+            if FENCE_RE.match(ln):
+                fence = not fence
+                code += 1
+            elif fence:
+                code += 1
+        table = sum(1 for ln in chunk if ln.strip().startswith("|"))
+        why = []
+        if SUPPLEMENTARY_RE.search(title):
+            why.append("heading names reference material")
+        if code >= max(6, len(chunk) * 0.4):
+            why.append("mostly code")
+        if table >= 8:
+            why.append("a %d-row table" % table)
+        core = bool(CORE_RE.search(title))
+        kind = "core" if core and not why else ("supplementary" if why and not core else ("mixed" if why else "core"))
+        out.append({"heading": title, "level": lvl, "start": i, "end": end, "lines": len(chunk),
+                    "chars": len(text), "tokens": est_tokens(len(text)), "kind": kind, "why": why})
+    return out
+
+
+def offload_candidates(path, min_tokens=250, big=1000):
+    """Top-level sections worth moving to references/: supplementary ones of min_tokens or more, and any
+    section of `big` tokens or more (split by subtopic). The steps the model must always follow stay."""
+    _, body = body_of(path)
+    secs = sections(body)
+    top = min([s["level"] for s in secs] or [2])
+    out = []
+    for s in secs:
+        if s["level"] != top:
+            continue
+        if (s["kind"] == "supplementary" and s["tokens"] >= min_tokens) or (s["kind"] != "core" and s["tokens"] >= big):
+            out.append(dict(s, reason="; ".join(s["why"]) or "large"))
+        elif s["kind"] == "core" and s["tokens"] >= big * 1.5:
+            out.append(dict(s, reason="large core section: move sub-parts that only some tasks need"))
+    return out
+
+
+def reference_problems(skill_dir):
+    """Reference files that link on to other markdown in the skill (Claude may read nested files partially)
+    and reference files over 100 lines with no contents list near the top."""
+    nested, no_toc = [], []
+    top = ("SKILL.MD", "RESEARCH.MD", "CHANGELOG.MD", "LEARNINGS.MD", "TESTS.MD", "MAINTENANCE.MD", "README.MD", "TESTS-ARCHIVE.MD")
+    for f in glob.glob(os.path.join(skill_dir, "**", "*.md"), recursive=True):
+        base = os.path.basename(f).upper()
+        if base in top or os.sep + "evals" + os.sep in f:
+            continue
+        t = read_text(f)
+        rel = os.path.relpath(f, skill_dir).replace(os.sep, "/")
+        for m in LINK_RE.finditer(t):
+            target = os.path.normpath(os.path.join(os.path.dirname(f), m.group(1)))
+            if os.path.isfile(target) and os.path.basename(target).upper() not in top and _norm_dir(target).startswith(_norm_dir(skill_dir)):
+                nested.append(rel)
+                break
+        lines = t.splitlines()
+        if len(lines) > 100 and not re.search(r"(?im)^#{1,3}\s*(contents|table of contents|toc)\b", NL.join(lines[:40])):
+            no_toc.append(rel)
+    return sorted(set(nested)), sorted(no_toc)
+
+
+def slug(text):
+    return re.sub(r"-+", "-", re.sub(r"[^a-z0-9]+", "-", text.lower())).strip("-")[:48] or "section"
+
+
+def split_section(path, heading, to_rel, when):
+    """Move one section (the heading line kept in SKILL.md) into to_rel under the skill folder and leave a
+    pointer: '<heading>: read <link> when <when>.' Appends when the target exists; adds a contents list when
+    the target passes 100 lines. Backs SKILL.md up first. Returns (target path, backup path)."""
+    raw = open(path, "rb").read().decode("utf-8")
+    crlf = "\r\n" in raw
+    fm, body = body_of(path)
+    secs = [s for s in sections(body) if s["heading"].strip().lower() == heading.strip().lower()]
+    if not secs:
+        raise ValueError("no section headed '%s'" % heading)
+    s = secs[0]
+    if to_rel.startswith("/") or ".." in to_rel.replace("\\", "/").split("/"):
+        raise ValueError("--to must be a relative path inside the skill folder")
+    to_rel = to_rel.replace("\\", "/")
+    skill_dir = os.path.dirname(os.path.abspath(path))
+    target = os.path.join(skill_dir, *to_rel.split("/"))
+    moved = body[s["start"] + 1:s["end"]]
+    while moved and not moved[-1].strip():
+        moved.pop()
+    head_line = body[s["start"]]
+    # sub-headings move up so the section title becomes the file's title (### under ## becomes ##)
+    shifted = [ln[s["level"] - 1:] if re.match(r"^#{%d,6}\s" % (s["level"] + 1), ln) else ln for ln in moved]
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    existing = read_text(target) if os.path.exists(target) else ""
+    if existing:  # appended as one more ## section
+        content = existing.rstrip("\n") + "\n\n## " + s["heading"] + "\n\n" + NL.join(shifted)
+    else:
+        content = "# " + s["heading"] + "\n\n" + NL.join(shifted)
+    lines = content.splitlines()
+    if len(lines) > 100 and not re.search(r"(?im)^#{1,3}\s*contents\b", NL.join(lines[:40])):
+        subs = [re.sub(r"^#+\s*", "", ln) for ln in lines[1:] if re.match(r"^##\s", ln)]
+        if subs:
+            lines = lines[:1] + ["", "## Contents", ""] + ["- " + x for x in subs] + lines[1:]
+    bdir = os.path.join(state_dir(), "backups", time.strftime("%Y%m%d-%H%M%S"))
+    os.makedirs(bdir, exist_ok=True)
+    backup = os.path.join(bdir, os.path.basename(skill_dir) + ".SKILL.md")
+    shutil.copy2(path, backup)
+    with open(target, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(NL.join(lines).rstrip("\n") + "\n")
+    pointer = "Read [%s](%s) when %s." % (to_rel, to_rel, when.strip().rstrip("."))
+    new_body = body[:s["start"]] + [head_line, "", pointer, ""] + body[s["end"]:]
+    out = NL.join(fm + new_body).rstrip("\n") + "\n"
+    if crlf:
+        out = out.replace("\n", "\r\n")
+    with open(path, "wb") as fh:
+        fh.write(out.encode("utf-8"))
+    return target, backup
+
+
+# ----------------------------------------------------------------------------- parking lot
+# Parked skills leave every folder a host scans (so they cost no listing tokens and do not compete for
+# selection) and stay findable through a short index written INTO the instruction files the agent always
+# reads. Inline, not a pointer: Vercel's evals (2026-01-27) had an 8 KB index in AGENTS.md at 100% while
+# skills the agent had to decide to invoke sat at 53-79%, never invoked in 56% of cases; Claude Code
+# re-injects the project CLAUDE.md after compaction but not the skill listing. Groups of at most 8 follow
+# the hierarchical-routing result (arXiv 2601.04748: 4-8 items per level). Research: RESEARCH.md R-20260926-4.
+
+PARK_DIRNAME = "parked-skills"
+MARK_START = "<!-- skill-tidy:parked:start -->"
+MARK_END = "<!-- skill-tidy:parked:end -->"
+FEATURE_RE = re.compile(r"\$\{CLAUDE_SKILL_DIR\}|\$\{CLAUDE_PLUGIN_ROOT\}|^!`|^\s*(allowed-tools|hooks|context):", re.M)
+
+
+def features(text):
+    """Skill features a plain file read does not provide (substitution, ! injection, pre-approved tools,
+    hooks, a forked context): such a skill must be unparked to work fully."""
+    return sorted(set(m.group(0).strip().rstrip(":").lstrip("!`") or "!` injection" for m in FEATURE_RE.finditer(text or "")))
+
+
+def park_dir(scope, project=None):
+    if scope == "project":
+        if not project:
+            raise ValueError("project scope needs --project or a working directory")
+        return os.path.join(project, ".agents", PARK_DIRNAME)
+    return os.path.join(home(), ".agents", PARK_DIRNAME)
+
+
+def manifest_path(scope, project=None):
+    return os.path.join(park_dir(scope, project), "parked.json")
+
+
+def load_manifest(scope, project=None):
+    m = read_json(manifest_path(scope, project), {}) or {}
+    return m if isinstance(m, dict) else {}
+
+
+def save_manifest(scope, project, m):
+    p = manifest_path(scope, project)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(m, fh, indent=2, sort_keys=True)
+        fh.write("\n")
+
+
+def is_link(p):
+    """A symlink or a Windows directory junction: removing it must never touch the target."""
+    try:
+        if os.path.islink(p):
+            return True
+        return os.path.isdir(p) and _norm_dir(os.path.realpath(p)) != _norm_dir(os.path.abspath(p))
+    except OSError:
+        return False
+
+
+def make_link(target, link):
+    if os.name == "nt":
+        try:
+            import _winapi
+            _winapi.CreateJunction(os.path.abspath(target), os.path.abspath(link))
+            return
+        except (ImportError, OSError, AttributeError):
+            pass
+    os.symlink(os.path.abspath(target), link, target_is_directory=True)
+
+
+def remove_link(p):
+    try:
+        os.unlink(p)
+    except OSError:
+        os.rmdir(p)  # a junction is removed as an empty directory; its target is untouched
+
+
+def index_line(name, desc, max_len=150):
+    """One routing line: the description's first sentence, which the rules ask to carry the key use case and
+    its trigger words (ST014), with bracketed asides dropped and cut at a word boundary. The 'Use when' clause
+    is a poorer source: once its quoted examples are removed little is left."""
+    d = re.sub(r"\s+", " ", desc or "").strip()
+    text = re.split(r"(?<=[.!?])\s", d, maxsplit=1)[0]
+    text = re.sub(r"\s*\([^()]*\)", "", text)
+    text = re.sub(r"\s*,\s*(,\s*)+", ", ", text).strip(" ,;.")
+    if len(text) > max_len:
+        text = text[:max_len].rsplit(" ", 1)[0].rstrip(" ,;") + "..."
+    return text
+
+
+def group_for(name, explicit=None):
+    if explicit:
+        return explicit
+    return re.split(r"[-_:]", name.lower())[0]
+
+
+def park(name, scope="user", project=None, group=None, line=None, soft=False, skills=None):
+    """Move one skill out of the scanned roots (or, for a link, remove only the link) and record it.
+    soft: Claude Code only, set skillOverrides "off" and leave the folder where it is. Returns the entry."""
+    sk = skills if skills is not None else scan("all", project)
+    s = next((x for x in sk if name in (x["id"], x["name"])), None)
+    if not s:
+        raise ValueError("no skill named %s in any scanned root" % name)
+    if s["plugin"]:
+        raise ValueError("%s belongs to plugin %s: plugin skills live in a versioned cache and are never moved; "
+                         "use `park --plugin %s` to disable the plugin and index its skills" % (s["id"], s["plugin"], s["plugin"]))
+    src = os.path.dirname(os.path.abspath(s["path"]))
+    m = load_manifest(scope, project)
+    if s["name"] in m:
+        raise ValueError("%s is already parked" % s["name"])
+    body = read_text(s["path"])
+    entry = {"name": s["name"], "origin": src, "parked": today(), "group": group_for(s["name"], group),
+             "line": line or index_line(s["name"], s["desc"]), "features": features(body),
+             "mode": "soft" if soft else "move"}
+    if soft:
+        merge_skill_overrides({s["name"]: "off"})
+        entry["path"] = src
+    elif is_link(src):
+        entry.update({"mode": "link", "path": os.path.realpath(src)})
+        remove_link(src)
+    else:
+        dest = os.path.join(park_dir(scope, project), s["name"])
+        if os.path.exists(dest):
+            raise ValueError("%s already exists in the parking lot" % dest)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        shutil.move(src, dest)
+        entry["path"] = dest
+    m[s["name"]] = entry
+    save_manifest(scope, project, m)
+    return entry
+
+
+def park_plugin(plugin, scope="user", project=None, group=None):
+    """Disable a Claude Code plugin in the user settings (with a backup) and index its skills by their
+    current install path; `parked doctor` re-resolves the path when the plugin updates."""
+    roots = [(p, g) for p, g in claude_plugin_roots(project) if p == plugin]
+    if not roots:
+        raise ValueError("no installed, enabled plugin named %s" % plugin)
+    reg = read_json(os.path.join(claude_dir(), "plugins", "installed_plugins.json"), {}) or {}
+    key = next((k_ for k_ in (reg.get("plugins") or {}) if k_.split("@")[0] == plugin), plugin)
+    p = os.path.join(claude_dir(), "settings.json")
+    cur = read_json(p, {}) or {}
+    bdir = os.path.join(state_dir(), "backups", time.strftime("%Y%m%d-%H%M%S"))
+    os.makedirs(bdir, exist_ok=True)
+    if os.path.exists(p):
+        shutil.copy2(p, os.path.join(bdir, "settings.json"))
+    ep = cur.get("enabledPlugins") if isinstance(cur.get("enabledPlugins"), dict) else {}
+    ep[key] = False
+    cur["enabledPlugins"] = ep
+    with open(p, "w", encoding="utf-8") as fh:
+        json.dump(cur, fh, indent=2)
+        fh.write("\n")
+    m = load_manifest(scope, project)
+    added = []
+    for _, g in roots:
+        for f in sorted(glob.glob(g)):
+            s = parse_skill(f)
+            nm = "%s:%s" % (plugin, s["name"])
+            m[nm] = {"name": nm, "origin": "plugin:" + key, "parked": today(), "group": group or plugin, "mode": "plugin",
+                     "line": index_line(s["name"], s["desc"]), "path": os.path.dirname(os.path.abspath(f)),
+                     "features": features(read_text(f))}
+            added.append(nm)
+    save_manifest(scope, project, m)
+    return key, added
+
+
+def unpark(name, scope="user", project=None):
+    m = load_manifest(scope, project)
+    e = m.get(name)
+    if not e:
+        raise ValueError("%s is not parked (%s)" % (name, manifest_path(scope, project)))
+    if e["mode"] == "soft":
+        p = os.path.join(claude_dir(), "settings.json")
+        cur = read_json(p, {}) or {}
+        (cur.get("skillOverrides") or {}).pop(e["name"], None)
+        with open(p, "w", encoding="utf-8") as fh:
+            json.dump(cur, fh, indent=2)
+            fh.write("\n")
+    elif e["mode"] == "plugin":
+        key = e["origin"].split(":", 1)[1]
+        p = os.path.join(claude_dir(), "settings.json")
+        cur = read_json(p, {}) or {}
+        (cur.get("enabledPlugins") or {})[key] = True
+        with open(p, "w", encoding="utf-8") as fh:
+            json.dump(cur, fh, indent=2)
+            fh.write("\n")
+        for k_ in [k_ for k_, v in m.items() if v.get("origin") == e["origin"]]:
+            m.pop(k_)
+        save_manifest(scope, project, m)
+        return e
+    elif os.path.exists(e["origin"]):
+        raise ValueError("%s exists again; move or remove it first" % e["origin"])
+    elif e["mode"] == "link":
+        os.makedirs(os.path.dirname(e["origin"]), exist_ok=True)
+        make_link(e["path"], e["origin"])
+    else:
+        os.makedirs(os.path.dirname(e["origin"]), exist_ok=True)
+        shutil.move(e["path"], e["origin"])
+    m.pop(name)
+    save_manifest(scope, project, m)
+    return e
+
+
+def render_index(m, tidy_cmd, inline_max=40):
+    """(full index text, block to write into instruction files). The block is the full index up to
+    inline_max lines, otherwise one line per group with the index file's path."""
+    groups = {}
+    for nm, e in sorted(m.items()):
+        groups.setdefault(e.get("group") or "general", []).append(e)
+    head = [
+        "## Parked skills",
+        "",
+        "Installed but not listed, to save context. When a task matches a line, read that SKILL.md in full before acting and follow it. "
+        "Its folder is the skill's base directory: resolve `${CLAUDE_SKILL_DIR}` and relative `scripts/` paths against it and run scripts by absolute path. "
+        "Lines marked (unpark) need skill features a plain read cannot give: run `%s unpark <name>` first. To use one often, unpark it." % tidy_cmd,
+        "",
+    ]
+    body = []
+    for g in sorted(groups):
+        body.append("### %s" % g)
+        for e in groups[g]:
+            flag = " (unpark)" if e.get("features") else ""
+            body.append("- `%s`%s: %s. `%s/SKILL.md`" % (e["name"], flag, e["line"].rstrip("."), e["path"].replace("\\", "/")))
+        body.append("")
+    full = NL.join(head + body).rstrip() + NL
+    if len(body) <= inline_max:
+        block = full
+    else:
+        summary = ["### %s (%d): %s" % (g, len(groups[g]), ", ".join("`%s`" % e["name"] for e in groups[g][:8])) for g in sorted(groups)]
+        block = NL.join(head[:2] + [head[2] + " The full index with every line and path is `%s`; read it when no active skill fits." % "{INDEX}", ""] + summary) + NL
+    big = [g for g in groups if len(groups[g]) > 8]
+    return full, block, big
+
+
+def write_block(path, block):
+    """Replace or append the marked block in an instruction file, keeping every other byte and the line
+    endings. An empty block removes it. Backs the file up first."""
+    raw = open(path, "rb").read().decode("utf-8") if os.path.exists(path) else ""
+    crlf = "\r\n" in raw
+    t = raw.replace("\r\n", "\n")
+    new = (MARK_START + "\n" + block.rstrip("\n") + "\n" + MARK_END + "\n") if block else ""
+    if MARK_START in t and MARK_END in t:
+        a, rest = t.split(MARK_START, 1)
+        _, b = rest.split(MARK_END, 1)
+        t = a + new + b.lstrip("\n") if new else (a.rstrip("\n") + "\n" + b.lstrip("\n"))
+    elif new:
+        t = (t.rstrip("\n") + "\n\n" if t.strip() else "") + new
+    if raw:
+        bdir = os.path.join(state_dir(), "backups", time.strftime("%Y%m%d-%H%M%S"))
+        os.makedirs(bdir, exist_ok=True)
+        shutil.copy2(path, os.path.join(bdir, re.sub(r"[^A-Za-z0-9.]", "_", os.path.abspath(path))[-80:]))
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    if crlf:
+        t = t.replace("\n", "\r\n")
+    with open(path, "wb") as fh:
+        fh.write(t.encode("utf-8"))
+
+
+def link_targets(scope, project=None, hosts=("claude", "codex")):
+    """Instruction files every session of each host reads. User: ~/.claude/CLAUDE.md, ~/.codex/AGENTS.md (when
+    Codex is set up). Project: AGENTS.md when it exists (Codex, Copilot, Cursor; Claude through an @AGENTS.md
+    import), and CLAUDE.md when it exists and does not import AGENTS.md."""
+    out = []
+    if scope == "user":
+        if "claude" in hosts:
+            out.append(os.path.join(claude_dir(), "CLAUDE.md"))
+        if "codex" in hosts and os.path.isdir(os.path.join(home(), ".codex")):
+            out.append(os.path.join(home(), ".codex", "AGENTS.md"))
+        return out
+    agents = os.path.join(project, "AGENTS.md")
+    claude = os.path.join(project, "CLAUDE.md")
+    if os.path.exists(agents):
+        out.append(agents)
+    if os.path.exists(claude) and not re.search(r"(?m)^\s*@AGENTS\.md", read_text(claude)):
+        out.append(claude)
+    return out or [agents]
+
+
+def reindex(scope, project=None, hosts=("claude", "codex")):
+    m = load_manifest(scope, project)
+    tidy_cmd = "python %s" % os.path.abspath(__file__).replace("\\", "/")
+    full, block, big = render_index(m, tidy_cmd)
+    d = park_dir(scope, project)
+    os.makedirs(d, exist_ok=True)
+    idx = os.path.join(d, "PARKED.md")
+    with open(idx, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(full)
+    block = block.replace("{INDEX}", idx.replace("\\", "/")) if m else ""
+    targets = link_targets(scope, project, hosts)
+    for t in targets:
+        write_block(t, block)
+    return idx, targets, est_tokens(len(block)), big
+
+
+def parked_doctor(scope, project=None):
+    """Problems: parked folders under a scanned root, index paths that no longer exist (plugin updates move
+    them: re-resolved here), a parked name that is also active, skill features a plain read loses."""
+    m = load_manifest(scope, project)
+    probs = []
+    active = {s["name"] for s in scan("all", project)}
+    roots = [_norm_dir(os.path.dirname(os.path.dirname(g))) for _, _, g in roots_for("all", project)]
+    for nm, e in sorted(m.items()):
+        p = e.get("path", "")
+        if e["mode"] == "move" and any(_norm_dir(p).startswith(r + os.sep) for r in roots):
+            probs.append("%s: parked folder %s is inside a scanned skills root" % (nm, p))
+        if not os.path.isfile(os.path.join(p, "SKILL.md")):
+            if e["mode"] == "plugin":
+                plugin = nm.split(":")[0]
+                new = [g for pl, g in claude_plugin_roots(project) if pl == plugin]
+                probs.append("%s: plugin path moved (update?); `parked index` after re-parking the plugin" % nm if not new else "%s: path gone" % nm)
+            else:
+                probs.append("%s: %s/SKILL.md is missing" % (nm, p))
+        if e["mode"] in ("move", "link") and nm in active:
+            probs.append("%s: also active in a scanned root (duplicate)" % nm)
+        if e.get("features"):
+            probs.append("%s: uses %s; the index marks it (unpark)" % (nm, ", ".join(e["features"])))
+    return probs
+
+
+def cmd_park(a):
+    project = a.project or os.getcwd()
+    try:
+        if a.plugin:
+            key, added = park_plugin(a.plugin, a.scope, project, a.group)
+            print("disabled plugin %s in %s (backup kept) and parked %d skills: %s" % (key, os.path.join(claude_dir(), "settings.json"), len(added), ", ".join(added)))
+        else:
+            if not a.name:
+                print("give a skill name, or --plugin NAME")
+                return 2
+            e = park(a.name, a.scope, project, a.group, a.line, a.soft)
+            print("parked %s (%s) -> %s%s" % (e["name"], e["mode"], e["path"], ("; uses %s, marked (unpark) in the index" % ", ".join(e["features"])) if e["features"] else ""))
+    except ValueError as ex:
+        print("refused: %s" % ex)
+        return 1
+    idx, targets, toks, big = reindex(a.scope, project)
+    print("index %s (~%s tokens in %s)" % (idx, k(toks), ", ".join(targets)))
+    if big:
+        print("groups over 8 skills (split them with --group): %s" % ", ".join(big))
+    return 0
+
+
+def cmd_unpark(a):
+    project = a.project or os.getcwd()
+    try:
+        e = unpark(a.name, a.scope, project)
+    except ValueError as ex:
+        print("refused: %s" % ex)
+        return 1
+    idx, targets, toks, _ = reindex(a.scope, project)
+    print("unparked %s -> %s (Claude Code picks it up live; Codex needs a restart); index ~%s tokens" % (a.name, e["origin"], k(toks)))
+    return 0
+
+
+def cmd_parked(a):
+    project = a.project or os.getcwd()
+    m = load_manifest(a.scope, project)
+    if a.action == "index":
+        idx, targets, toks, big = reindex(a.scope, project)
+        out({"index": idx, "targets": targets, "block_tokens": toks, "big_groups": big}, a.json,
+            ["index %s, block ~%s tokens written to %s" % (idx, k(toks), ", ".join(targets))] + (["groups over 8: " + ", ".join(big)] if big else []))
+    elif a.action == "doctor":
+        probs = parked_doctor(a.scope, project)
+        out(probs, a.json, ["%d parked, %d notes" % (len(m), len(probs))] + ["  " + p for p in probs])
+    elif a.action == "suggest":
+        c = usage(a.days)
+        sk = [s for s in listed(scan("claude", project)) if c.get(s["name"], 0) == 0 and s["name"] not in m]
+        sk.sort(key=lambda s: -s["listed_chars"])
+        lines = ["never used in %d days, largest listing cost first (park with `park <name>`; plugins with `park --plugin <plugin>`):" % a.days]
+        for s in sk:
+            lines.append("  %5d chars  %s%s" % (s["listed_chars"], s["id"], "  (plugin)" if s["plugin"] else ""))
+        out([{"id": s["id"], "chars": s["listed_chars"], "plugin": s["plugin"]} for s in sk], a.json, lines)
+    else:
+        lines = ["%d parked (%s): %s" % (len(m), a.scope, manifest_path(a.scope, project))]
+        for nm, e in sorted(m.items()):
+            lines.append("  %-36s %-6s %s" % (nm, e["mode"], e["path"]))
+        out(m, a.json, lines)
+    return 0
 
 
 # ----------------------------------------------------------------------------- budgets
@@ -648,8 +1201,11 @@ def _catalog(a):
 
 
 def _find(skills, target):
-    if os.path.isdir(target) or os.path.isfile(target):
-        p = target if target.endswith("SKILL.md") else os.path.join(target, "SKILL.md")
+    for s in skills:  # a catalog name wins over a same-named folder in the working directory
+        if target in (s["id"], s["name"]):
+            return s
+    p = target if target.endswith("SKILL.md") else os.path.join(target, "SKILL.md")
+    if os.path.isfile(p):
         rp = os.path.realpath(p)
         for s in skills:
             if os.path.realpath(s["path"]) == rp:
@@ -696,7 +1252,14 @@ def cmd_scan(a):
 def cmd_lint(a):
     sk = _catalog(a)
     cat = listed(sk)
-    targets = [_find(sk, t) for t in a.skills] if a.skills else cat
+    expanded = []
+    for t in a.skills or []:
+        if os.path.isdir(t) and not os.path.isfile(os.path.join(t, "SKILL.md")):
+            found = sorted(glob.glob(os.path.join(t, "skills", "*", "SKILL.md")) + glob.glob(os.path.join(t, ".claude", "skills", "*", "SKILL.md")))
+            expanded += [os.path.dirname(f) for f in found] or [t]
+        else:
+            expanded.append(t)
+    targets = [_find(sk, t) for t in expanded] if a.skills else cat
     res, lines, worst = [], [], 0
     for s in targets:
         if s is None:
@@ -762,11 +1325,14 @@ def check_rewrite(sk, s, new, threshold=0.45):
     lost, dropped = coverage(s["desc"] + " " + s["when_to_use"], new + " " + s["when_to_use"])
     before = max_similarity(listed(sk), s["id"])
     after = max_similarity(listed(sk), s["id"], {s["id"]: new + " " + s["when_to_use"]})
+    findings = [f for f in findings if f[0] not in BODY_RULES]
+    sim_ok = after[0] < threshold or after[0] <= before[0]
     return {"findings": [{"rule": r, "severity": v, "message": m} for r, v, m in findings], "lost_triggers": lost,
             "dropped_terms": dropped, "chars_before": len(s["desc"]), "chars_after": len(new),
             "max_similarity_before": {"score": before[0], "with": before[1]},
             "max_similarity_after": {"score": after[0], "with": after[1]},
-            "ok": not any(v == "error" for _, v, _ in findings) and not lost}
+            "similarity_ok": sim_ok,
+            "ok": not any(v == "error" for _, v, _ in findings) and not lost and sim_ok}
 
 
 def cmd_check(a):
@@ -785,7 +1351,9 @@ def cmd_check(a):
         lines.append("  LOST  trigger '%s' (missing words: %s)" % (x["trigger"], ", ".join(x["missing_words"])))
     if r["dropped_terms"]:
         lines.append("  note  frequent terms no longer present: %s" % ", ".join(r["dropped_terms"]))
-    lines.append("OK: safe to apply" if r["ok"] else "NOT OK: fix the errors and lost triggers first (or apply --force)")
+    if not r["similarity_ok"]:
+        lines.append("  SIM   the closest skill is now at or above %.2f and higher than before" % a.threshold)
+    lines.append("OK: safe to apply" if r["ok"] else "NOT OK: fix the errors, lost triggers or similarity first (or apply --force)")
     out(r, a.json, lines)
     return 0 if r["ok"] else 1
 
@@ -806,6 +1374,57 @@ def cmd_apply(a):
         return 1
     b = set_description(s["path"], new)
     print("wrote %s (backup %s); closest skill now %.2f (%s)" % (s["path"], b, r["max_similarity_after"]["score"], r["max_similarity_after"]["with"]))
+    return 0
+
+
+def cmd_sections(a):
+    sk = _catalog(a)
+    s = _find(sk, a.skill)
+    if not s:
+        print("no skill %s" % a.skill)
+        return 2
+    _, body = body_of(s["path"])
+    secs = sections(body)
+    cands = {c["heading"] for c in offload_candidates(s["path"], a.min_tokens)}
+    nested, no_toc = reference_problems(os.path.dirname(os.path.abspath(s["path"])))
+    total = est_tokens(len(NL.join(body)))
+    lines = ["%s: body %d lines, ~%s tokens loaded on every use" % (s["id"], len(body), k(total))]
+    for x in secs:
+        mark = "  -> move to references/%s.md" % slug(x["heading"]) if x["heading"] in cands else ""
+        lines.append("  %s%-40s %5d lines ~%6s  %-13s %s%s" % ("  " * (x["level"] - 2), x["heading"][:40], x["lines"], k(x["tokens"]), x["kind"], ", ".join(x["why"]), mark))
+    saved = sum(x["tokens"] for x in secs if x["heading"] in cands)
+    if cands:
+        lines.append("moving the %d marked section(s) keeps ~%s tokens out of every use; each leaves one 'Read <file> when <condition>.' line" % (len(cands), k(saved)))
+        lines.append("then: tidy.py split %s --section \"<heading>\" --to references/<file>.md --when \"<the tasks that need it>\"" % s["path"].replace("\\", "/"))
+    if nested:
+        lines.append("nested references (keep one level deep): " + ", ".join(nested))
+    if no_toc:
+        lines.append("add a contents list to: " + ", ".join(no_toc))
+    out({"id": s["id"], "body_tokens": total, "sections": secs, "offload": sorted(cands), "offload_tokens": saved,
+         "nested": nested, "no_toc": no_toc}, a.json, lines)
+    return 0
+
+
+def cmd_split(a):
+    sk = _catalog(a)
+    s = _find(sk, a.skill)
+    if not s:
+        print("no skill %s" % a.skill)
+        return 2
+    if "plugins" + os.sep + "cache" in os.path.abspath(s["path"]):
+        print("refused: %s is an installed plugin copy; edit the plugin's source repository instead" % s["path"])
+        return 1
+    if not a.when or len(a.when.split()) < 3:
+        print("refused: --when must say which tasks need this section (at least three words), so the agent knows when to read it")
+        return 1
+    to = a.to or "references/%s.md" % slug(a.section)
+    try:
+        target, backup = split_section(s["path"], a.section, to, a.when)
+    except ValueError as e:
+        print("refused: %s" % e)
+        return 1
+    _, body = body_of(s["path"])
+    print("moved '%s' to %s; SKILL.md body now ~%s tokens (backup %s)" % (a.section, target, k(est_tokens(len(NL.join(body)))), backup))
     return 0
 
 
@@ -968,6 +1587,33 @@ def main(argv=None):
         if name == "apply":
             p.add_argument("--force", action="store_true")
         p.set_defaults(fn=fn)
+    p = common(sp.add_parser("sections", help="body sections by size and kind; what could load on demand"))
+    p.add_argument("skill")
+    p.add_argument("--min-tokens", type=int, default=250)
+    p.set_defaults(fn=cmd_sections)
+    p = common(sp.add_parser("split", help="move one body section to a reference file read only when needed"))
+    p.add_argument("skill")
+    p.add_argument("--section", required=True, help="the heading text of the section to move")
+    p.add_argument("--to", help="relative target (default references/<heading-slug>.md)")
+    p.add_argument("--when", help="which tasks need it: becomes 'Read <file> when <this>.'")
+    p.set_defaults(fn=cmd_split)
+    p = common(sp.add_parser("park", help="move a skill to the parking lot: unlisted, still findable through the index"))
+    p.add_argument("name", nargs="?")
+    p.add_argument("--scope", default="user", choices=["user", "project"])
+    p.add_argument("--group", help="index group (default: the name's first word)")
+    p.add_argument("--line", help="the index line (default: the description's 'Use when' clause)")
+    p.add_argument("--soft", action="store_true", help="Claude Code only: skillOverrides off, folder stays")
+    p.add_argument("--plugin", help="disable this Claude Code plugin and index its skills")
+    p.set_defaults(fn=cmd_park)
+    p = common(sp.add_parser("unpark", help="put a parked skill back where it was"))
+    p.add_argument("name")
+    p.add_argument("--scope", default="user", choices=["user", "project"])
+    p.set_defaults(fn=cmd_unpark)
+    p = common(sp.add_parser("parked", help="the parking lot: list | index | doctor | suggest"))
+    p.add_argument("action", nargs="?", default="list", choices=["list", "index", "doctor", "suggest"])
+    p.add_argument("--scope", default="user", choices=["user", "project"])
+    p.add_argument("--days", type=int, default=30)
+    p.set_defaults(fn=cmd_parked)
     p = common(sp.add_parser("budget", help="listing size against each host's budget"))
     p.add_argument("--window", type=int, default=200000, help="model context window in tokens (default 200000)")
     p.set_defaults(fn=cmd_budget)

@@ -17,7 +17,10 @@
   "last_checked": "2026-09-26",
   "next_due": "2026-10-10",
   "verify_at_use": false,
-  "volatile_claims": [],
+  "volatile_claims": [
+    "Parking-lot design (inline index in always-read instruction files, groups of 8 or fewer) rests on one vendor eval (Vercel 2026-01-27) and routing research; no study tests an index line format",
+    "Body-offload heuristics (supplementary vs core sections, 250/1,000-token thresholds) are inference from Anthropic's authoring guide and SkillReducer"
+  ],
   "contradiction": null,
   "events": [],
   "streak": {
@@ -36,8 +39,8 @@
   ],
   "counts": {
     "learnings": 0,
-    "changes": 1,
-    "research": 0,
+    "changes": 2,
+    "research": 2,
     "tests": 2
   },
   "consolidate_every": 25,
@@ -52,5 +55,5 @@
     "last_failure": null,
     "research_after_days": null
   },
-  "version": "0.1.1"
+  "version": "0.2.0"
 }

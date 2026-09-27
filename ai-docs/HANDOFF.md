@@ -10,7 +10,7 @@ Eval suite run and recorded (T-20260926-2, 6/6): cases in the root `evals/` fold
 See [INDEX.md](INDEX.md): skill-tidy is its own plugin; the script checks and the model rewrites once.
 
 ## Next single action
-CLAUDE_CONFIG_DIR is honoured since 0.1.1 (TestConfigDir). Re-run action-1 under WSL2 to confirm it now lists the plugin skills; then decide with the user whether the repo goes public (privacy scan first, as context-health did).
+0.2.0 adds body offload (sections, split) and the parking lot (park, unpark, parked; references/parking.md). Next: run the eval suite again with a parking case (park a fixture skill, then a prompt that needs it: the agent must read its SKILL.md from the index), and add a trigger-coverage command that re-runs a skill's trigger evals after a rewrite (gap 7 from the clean-up run).
 
 ## Gotchas
 Claude Code's listing budget unit is unsettled (characters per the skills docs, tokens per everlast's skill-budget); see RESEARCH.md Open questions. Copilot and Cursor skill roots in `roots_for` are the least certain part. `apply` refuses installed plugin copies by design: edit the source repo and reinstall.

@@ -257,5 +257,171 @@ class TestStartup(Base):
         self.assertIn("tool search is off", text)
 
 
+
+class TestGaps(Base):
+    def test_apostrophes_similarity_rule_and_repo_root_lint(self):
+        self.assertEqual(tidy.triggers("the interview app's questions (\"give him Pin Down\") and 'refresh x'"), ["give him Pin Down", "refresh x"])
+        skill(self.user, "feed-scan", FEED)
+        p = skill(self.user, "radar-sweep", "Sweeps radar data from weather stations into daily maps. Use when the user asks for a radar sweep.")
+        rc, text = run("check", p, "--desc", FEED + " Radar too.", "--project", self.proj, "--json")
+        r = json.loads(text)
+        self.assertFalse(r["similarity_ok"])
+        self.assertFalse(r["ok"])
+        repo = os.path.join(self.tmp, "repo")
+        skill(os.path.join(repo, "skills"), "painter", PAINT)
+        rc, text = run("lint", repo, "--project", self.proj, "--min", "info")
+        self.assertNotIn("ST004", text)
+        self.assertIn("1 skills checked", text)
+
+
+class TestBody(Base):
+    BODY = ("# Demo\n\nIntro line.\n\n## Step 1: do the thing\n\nRun the script.\n\n"
+            "## Examples\n\n" + "".join("Example %d: input, output and a short explanation of the case.\n" % i for i in range(60)) +
+            "\n### Edge cases\n\nSome edge notes.\n\n```\n## not a heading inside a fence\n```\n\n"
+            "## Report\n\nSay what changed.\n")
+
+    def test_sections_finds_supplementary_and_ignores_fenced_headings(self):
+        p = skill(self.user, "demo", PAINT, body=self.BODY)
+        _, body = tidy.body_of(p)
+        heads = [s["heading"] for s in tidy.sections(body)]
+        self.assertEqual(heads, ["Step 1: do the thing", "Examples", "Edge cases", "Report"])
+        cands = [c["heading"] for c in tidy.offload_candidates(p)]
+        self.assertEqual(cands, ["Examples"])
+        rc, text = run("sections", "demo", "--project", self.proj)
+        self.assertIn("-> move to references/examples.md", text)
+
+    def test_split_moves_section_leaves_pointer_and_keeps_crlf(self):
+        p = skill(self.user, "demo", PAINT, body=self.BODY)
+        write(p, open(p, encoding="utf-8").read(), crlf=True)
+        rc, text = run("split", "demo", "--section", "Examples", "--when", "short", "--project", self.proj)
+        self.assertEqual(rc, 1)  # --when too vague
+        rc, text = run("split", "demo", "--section", "Examples", "--when", "the user asks for worked examples or edge cases", "--project", self.proj)
+        self.assertEqual(rc, 0, text)
+        raw = open(p, "rb").read().decode("utf-8")
+        self.assertIn("\r\n", raw)
+        self.assertIn("## Examples\r\n\r\nRead [references/examples.md](references/examples.md) when the user asks for worked examples or edge cases.", raw)
+        self.assertNotIn("Example 5:", raw)
+        self.assertIn("## Report", raw)
+        self.assertIn("## not a heading inside a fence", open(os.path.join(self.user, "demo", "references", "examples.md"), encoding="utf-8").read())
+        ref = open(os.path.join(self.user, "demo", "references", "examples.md"), encoding="utf-8").read()
+        self.assertTrue(ref.startswith("# Examples\n"))
+        self.assertIn("\n## Edge cases\n", ref)  # ### moved up one level
+        self.assertEqual(tidy.parse_skill(p)["desc"], PAINT)
+        rc, text = run("split", "demo", "--section", "Nope", "--when", "never happens in practice", "--project", self.proj)
+        self.assertEqual(rc, 1)
+        rc, text = run("split", "demo", "--section", "Report", "--to", "../escape.md", "--when", "the final report is written", "--project", self.proj)
+        self.assertEqual(rc, 1)
+
+    def test_long_reference_gets_contents_and_lint_rules(self):
+        big = "# Demo\n\n## Step 1\n\nGo.\n\n## Reference tables\n\n" + "".join("### Topic %d\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n" % i for i in range(20))
+        p = skill(self.user, "demo", PAINT, body=big)
+        rc, _ = run("split", "demo", "--section", "Reference tables", "--when", "a task needs the lookup tables", "--project", self.proj)
+        ref = open(os.path.join(self.user, "demo", "references", "reference-tables.md"), encoding="utf-8").read()
+        self.assertIn("## Contents", ref)
+        d = os.path.join(self.user, "demo", "references")
+        write(os.path.join(d, "a.md"), "# A\n\nSee [b](b.md) and [research](../RESEARCH.md).\n")
+        write(os.path.join(d, "b.md"), "# B\n")
+        write(os.path.join(self.user, "demo", "RESEARCH.md"), "# R\n")
+        write(p, open(p, encoding="utf-8").read() + "\nRun scripts\\tool.py.\n")
+        s = tidy.parse_skill(p)
+        s.update({"id": "demo", "plugin": None})
+        rules = [r for r, _, _ in tidy.lint_skill(s)]
+        self.assertIn("ST021", rules)
+        self.assertIn("ST023", rules)
+        nested, _ = tidy.reference_problems(os.path.join(self.user, "demo"))
+        self.assertEqual(nested, ["references/a.md"])
+
+
+class TestParking(Base):
+    def cfg(self, name):
+        return os.path.join(self.home, ".claude", name)
+
+    def test_park_moves_indexes_into_claude_md_and_unpark_restores(self):
+        skill(self.user, "feed-scan", FEED)
+        skill(self.user, "painter", PAINT, body="# painter\n\nRun ${CLAUDE_SKILL_DIR}/scripts/go.py\n")
+        write(self.cfg("CLAUDE.md"), "# my rules\n\nkeep this\n", crlf=True)
+        rc, text = run("park", "feed-scan", "--project", self.proj)
+        self.assertEqual(rc, 0, text)
+        lot = os.path.join(self.home, ".agents", "parked-skills")
+        self.assertTrue(os.path.isfile(os.path.join(lot, "feed-scan", "SKILL.md")))
+        self.assertFalse(os.path.exists(os.path.join(self.user, "feed-scan")))
+        self.assertNotIn("feed-scan", [s["name"] for s in tidy.scan("claude", self.proj)])
+        run("park", "painter", "--project", self.proj)
+        raw = open(self.cfg("CLAUDE.md"), "rb").read().decode("utf-8")
+        self.assertIn("\r\n", raw)
+        self.assertIn("keep this", raw)
+        self.assertEqual(raw.count(tidy.MARK_START), 1)
+        self.assertIn("- `feed-scan`: Collect articles from news feeds", raw)
+        self.assertIn("feed-scan/SKILL.md`", raw)
+        self.assertIn("- `painter` (unpark):", raw)
+        self.assertIn("read that SKILL.md in full before acting", raw)
+        idx = open(os.path.join(lot, "PARKED.md"), encoding="utf-8").read()
+        self.assertIn("### feed", idx)
+        rc, text = run("parked", "doctor", "--project", self.proj)
+        self.assertIn("painter: uses ${CLAUDE_SKILL_DIR}", text)
+        rc, text = run("unpark", "feed-scan", "--project", self.proj)
+        self.assertEqual(rc, 0, text)
+        self.assertTrue(os.path.isfile(os.path.join(self.user, "feed-scan", "SKILL.md")))
+        raw = open(self.cfg("CLAUDE.md"), "rb").read().decode("utf-8")
+        self.assertNotIn("`feed-scan`", raw)
+        run("unpark", "painter", "--project", self.proj)
+        raw = open(self.cfg("CLAUDE.md"), "rb").read().decode("utf-8")
+        self.assertNotIn(tidy.MARK_START, raw)  # empty lot: block removed
+        self.assertTrue(raw.startswith("# my rules"))
+
+    def test_link_is_removed_not_its_target_and_comes_back(self):
+        src = os.path.join(self.tmp, "repo", "skills", "feed-scan")
+        skill(os.path.dirname(src), "feed-scan", FEED)
+        os.makedirs(self.user, exist_ok=True)
+        tidy.make_link(src, os.path.join(self.user, "feed-scan"))
+        self.assertTrue(tidy.is_link(os.path.join(self.user, "feed-scan")))
+        rc, text = run("park", "feed-scan", "--project", self.proj)
+        self.assertIn("(link)", text)
+        self.assertFalse(os.path.exists(os.path.join(self.user, "feed-scan")))
+        self.assertTrue(os.path.isfile(os.path.join(src, "SKILL.md")))  # the target is untouched
+        run("unpark", "feed-scan", "--project", self.proj)
+        self.assertTrue(tidy.is_link(os.path.join(self.user, "feed-scan")))
+
+    def test_soft_plugin_and_project_scope(self):
+        skill(self.user, "painter", PAINT)
+        rc, _ = run("park", "painter", "--soft", "--project", self.proj)
+        self.assertEqual(json.load(open(self.cfg("settings.json")))["skillOverrides"], {"painter": "off"})
+        self.assertTrue(os.path.exists(os.path.join(self.user, "painter")))
+        run("unpark", "painter", "--project", self.proj)
+        self.assertEqual(json.load(open(self.cfg("settings.json")))["skillOverrides"], {})
+        cache = os.path.join(self.cfg("plugins"), "cache", "mk", "plug", "1.0")
+        skill(os.path.join(cache, "skills"), "plug-one", FEED)
+        write(os.path.join(self.cfg("plugins"), "installed_plugins.json"),
+              json.dumps({"version": 2, "plugins": {"plug@mk": [{"scope": "user", "installPath": cache}]}}))
+        rc, text = run("park", "plug:plug-one", "--project", self.proj)
+        self.assertEqual(rc, 1)
+        self.assertIn("never moved", text)
+        rc, text = run("park", "--plugin", "plug", "--project", self.proj)
+        self.assertEqual(rc, 0, text)
+        self.assertIs(json.load(open(self.cfg("settings.json")))["enabledPlugins"]["plug@mk"], False)
+        self.assertIn("`plug:plug-one`", open(self.cfg("CLAUDE.md"), encoding="utf-8").read())
+        run("unpark", "plug:plug-one", "--project", self.proj)
+        self.assertIs(json.load(open(self.cfg("settings.json")))["enabledPlugins"]["plug@mk"], True)
+        pskill = skill(os.path.join(self.proj, ".claude", "skills"), "local-one", PAINT + " Local.")
+        write(os.path.join(self.proj, "AGENTS.md"), "# agents\n")
+        write(os.path.join(self.proj, "CLAUDE.md"), "@AGENTS.md\n")
+        rc, text = run("park", "local-one", "--scope", "project", "--project", self.proj)
+        self.assertEqual(rc, 0, text)
+        self.assertTrue(os.path.isfile(os.path.join(self.proj, ".agents", "parked-skills", "local-one", "SKILL.md")))
+        self.assertIn("`local-one`", open(os.path.join(self.proj, "AGENTS.md"), encoding="utf-8").read())
+        self.assertNotIn(tidy.MARK_START, open(os.path.join(self.proj, "CLAUDE.md"), encoding="utf-8").read())
+
+    def test_large_lot_writes_group_summary_and_flags_big_groups(self):
+        m = {}
+        for i in range(45):
+            m["tool-%02d" % i] = {"name": "tool-%02d" % i, "group": "tool", "line": "Use when tool %d" % i, "path": "/x/tool-%02d" % i, "features": []}
+        full, block, big = tidy.render_index(m, "python tidy.py")
+        self.assertIn("`tool-44`", full)
+        self.assertNotIn("`tool-44`", block)
+        self.assertIn("### tool (45):", block)
+        self.assertEqual(big, ["tool"])
+        self.assertEqual(tidy.index_line("x", "Builds charts from data (bar, line, pie) for reports. Use when the user asks ('bar chart of x')."),
+                         "Builds charts from data for reports")
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

@@ -52,6 +52,20 @@ Best sources (primary first): the vendor docs above, the Agent Skills spec, arXi
 
 Newest first. `Track` is subject, tooling, practice, or testing.
 
+### R-20260926-4 · 2026-09-26 · Subject and tooling: parking skills where the agent can still find them
+- Summary: Claude Code: `skillOverrides` off/name-only (plugin skills unaffected; disable the plugin), `disable-model-invocation`, `paths`; skill folders added or removed under a skills root take effect live; `@import` always loads the whole file (no lazy import); Claude sees AGENTS.md only if it decides to open it; after compaction the project-root CLAUDE.md is re-injected but the skill listing is not; `${CLAUDE_SKILL_DIR}` and `!` injection apply only to skills invoked through the skill system; no documented way to register an unlisted skill for loading by path. Codex scans `.agents/skills` up the tree and `~/.agents/skills`; Cursor walks skill roots recursively (so a lot must not sit under one); Copilot reads `.github/.claude/.agents` skills and loads `*.instructions.md` on demand by description. Vercel's evals (2026-01-27): an 8 KB index inlined in AGENTS.md passed 100%, skills 53% by default and 79% with explicit instructions, never invoked in 56% of cases. Prior art: sorcerai/skill-router (MCP server with skill_search / skill_load over `~/.claude/skill-vault`), registry MCP servers with search then get; vercel-labs/skills issue 634 (disable/enable, open). Routing research: groups of 4-8 per level (2601.04748). Pitfalls: junctioned skills missing from the desktop `/` menu (claude-code 68318), plugin cache paths change per version.
+- Track: subject, tooling, practice
+- Sources: https://code.claude.com/docs/en/skills, https://code.claude.com/docs/en/memory, https://code.claude.com/docs/en/context-window, https://learn.chatgpt.com/docs/build-skills, https://code.visualstudio.com/docs/copilot/customization/agent-skills, https://cursor.com/docs/context/rules, https://vercel.com/blog/agents-md-outperforms-skills-in-our-agent-evals, https://github.com/sorcerai/skill-router, https://github.com/vercel-labs/skills/issues/634, https://arxiv.org/html/2601.04748v2
+- Magnitude: 0.5
+- Applied: C-20260926-3 (park, unpark, parked; references/parking.md)
+
+### R-20260926-3 · 2026-09-26 · Subject: progressive disclosure of skill bodies
+- Summary: Anthropic's authoring guide: only name and description preload; SKILL.md is read when the skill is relevant and bundled files only when read ("no context penalty for large files" until accessed); SKILL.md is an overview pointing to reference files; body under 500 lines; references one level deep (nested files may be previewed with head -100); a table of contents in reference files over 100 lines; forward slashes. SkillReducer (arXiv 2603.29919, rev. 2026-06-24): over 60% of body content is non-actionable; taxonomy-driven classification plus progressive disclosure cut bodies 39% and descriptions 48% while functional quality rose 2.8%, retained across five models (0.965).
+- Track: subject
+- Sources: https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices, https://arxiv.org/abs/2603.29919
+- Magnitude: 0.4
+- Applied: C-20260926-3 (sections, split, ST020-ST023)
+
 ### R-20260926-2 · 2026-09-26 · Tooling and testing: what exists, and the gap skill-tidy fills
 - Summary: `/skill-doctor` covers per-skill cost, usage and never-invoked skills but not description quality or overlap; spec linters (skills-lint, skillscheck, skillmd-lint, agent-skill-linter) check fields and some similarity; skillprune and claude-skill-usage read transcripts for dead skills; skill-creator's `run_loop` optimises descriptions with a model and a 20-query eval set (60/40 split, 3 runs, 5 iterations). Claude Code transcripts record skill use as an assistant `tool_use` named `Skill` with `input.skill` (verified on the development machine); slash commands appear as `<command-name>` tags (format internal). Codex rollouts carry `<skill><name>` blocks (third-party parser). No tool combines cross-host rules, per-host budgets, a trigger-preserving rewrite check and multi-host config output.
 - Track: tooling, testing

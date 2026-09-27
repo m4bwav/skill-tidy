@@ -1,6 +1,6 @@
 {
   "name": "skill-tidy",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Keep an agent's skill catalog cheap and unambiguous: lint SKILL.md descriptions against the Agent Skills spec and host limits, explain and fix skills that compete for the same prompts without losing triggers, find never-used skills and hide them to save tokens, and audit the always-loaded startup context. Research-backed rules that refresh themselves (evergreen). Claude Code, Codex, Copilot, Cursor.",
   "author": "Mark Rogers",
   "license": "MIT",
