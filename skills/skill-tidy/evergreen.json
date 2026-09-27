@@ -38,15 +38,15 @@
     "learnings": 0,
     "changes": 0,
     "research": 0,
-    "tests": 0
+    "tests": 2
   },
   "consolidate_every": 25,
   "tests": {
-    "last_run": null,
-    "harness": null,
-    "env": null,
-    "cases": 0,
-    "passed": 0,
+    "last_run": "2026-09-26",
+    "harness": "claude plugin eval 2.1.281",
+    "env": "Windows 11 native (trigger, decoy) + WSL2 Ubuntu (Bash cases)",
+    "cases": 6,
+    "passed": 6,
     "failed": 0,
     "failing": [],
     "last_failure": null,

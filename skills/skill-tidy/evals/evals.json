@@ -40,7 +40,7 @@
       "evidence": {
         "type": "trace",
         "tool": "Bash",
-        "input_match": "tidy\\.py\\\"?\\s+(conflicts|lint)"
+        "input_match": "tidy\\.py[\\s\\S]*\\b(conflicts|lint)\\b"
       },
       "baseline": "not yet run",
       "runs": 3
