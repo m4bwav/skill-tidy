@@ -1,0 +1,61 @@
+{
+  "skill": "skill-tidy",
+  "_format": "skill-creator evals.json plus evergreen fields (kind, decoy, evidence, baseline); extra fields are ignored by skill-creator's runner. Rules: protocol/TESTING.md.",
+  "evals": [
+    {
+      "id": "trigger-1",
+      "kind": "trigger",
+      "prompt": "the wrong skill keeps firing when I ask for a chart, can you figure out which skills overlap and clean up their descriptions",
+      "expectations": ["the skill-tidy skill is invoked"],
+      "runs": 3
+    },
+    {
+      "id": "trigger-2",
+      "kind": "trigger",
+      "prompt": "how many tokens are my skills costing me every session? trim what isn't used",
+      "expectations": ["the skill-tidy skill is invoked"],
+      "runs": 3
+    },
+    {
+      "id": "decoy-1",
+      "kind": "trigger",
+      "decoy": true,
+      "prompt": "how big is this session, should I start a new one?",
+      "expectations": ["the skill-tidy skill is not invoked (context-health owns session size)"],
+      "runs": 3
+    },
+    {
+      "id": "decoy-2",
+      "kind": "trigger",
+      "decoy": true,
+      "prompt": "make me a new skill that summarizes my git log every morning",
+      "expectations": ["the skill-tidy skill is not invoked (creating a skill is skill-creator / evergreen-new)"],
+      "runs": 3
+    },
+    {
+      "id": "action-1",
+      "kind": "action",
+      "prompt": "check my installed skills for conflicting descriptions",
+      "expectations": ["tidy.py conflicts (or lint) was run, proven by the trace, not by the reply"],
+      "evidence": {
+        "type": "trace",
+        "tool": "Bash",
+        "input_match": "tidy\\.py\\\"?\\s+(conflicts|lint)"
+      },
+      "baseline": "not yet run",
+      "runs": 3
+    },
+    {
+      "id": "outcome-1",
+      "kind": "outcome",
+      "prompt": "the feed-scan skill in ./fixture/.claude/skills and radar-sweep overlap; rewrite feed-scan's description so they stop competing, without losing any of its triggers, and apply it",
+      "files": ["fixture/.claude/skills/feed-scan/SKILL.md", "fixture/.claude/skills/radar-sweep/SKILL.md"],
+      "expectations": [
+        "fixture/.claude/skills/feed-scan/SKILL.md has a new description of at most 1,024 chars that still contains 'scan the feeds' and 'what is new in databases'",
+        "a backup exists under ~/.skill-tidy/backups/",
+        "judge: the new description leads with feed-scan's own job and ends with one sentence pointing radar-sweep's job to radar-sweep"
+      ],
+      "runs": 3
+    }
+  ]
+}
