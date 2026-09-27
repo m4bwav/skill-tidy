@@ -272,6 +272,9 @@ class TestGaps(Base):
         rc, text = run("lint", repo, "--project", self.proj, "--min", "info")
         self.assertNotIn("ST004", text)
         self.assertIn("1 skills checked", text)
+        rules = TestLint.rules
+        self.assertNotIn("ST011", rules(self, "Sets repos up. Use at the start of a project or on 'stop relearning things'."))
+        self.assertNotIn("ST009", rules(self, "Sets repos up for agents with docs. Use at the start of a new project."))
 
 
 class TestBody(Base):
@@ -368,6 +371,13 @@ class TestParking(Base):
         raw = open(self.cfg("CLAUDE.md"), "rb").read().decode("utf-8")
         self.assertNotIn(tidy.MARK_START, raw)  # empty lot: block removed
         self.assertTrue(raw.startswith("# my rules"))
+
+    def test_plain_folder_under_a_linked_parent_is_not_a_link(self):
+        real = os.path.join(self.tmp, "real-parent")
+        os.makedirs(os.path.join(real, "child"))
+        tidy.make_link(real, os.path.join(self.tmp, "linked-parent"))  # like /var on macOS or 8.3 names on Windows
+        self.assertFalse(tidy.is_link(os.path.join(self.tmp, "linked-parent", "child")))
+        self.assertTrue(tidy.is_link(os.path.join(self.tmp, "linked-parent")))
 
     def test_link_is_removed_not_its_target_and_comes_back(self):
         src = os.path.join(self.tmp, "repo", "skills", "feed-scan")

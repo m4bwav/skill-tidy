@@ -2,7 +2,7 @@
 name: skill-tidy
 description: "Fix skills that compete for the same prompts and cut what the skill catalog costs in tokens. Lints SKILL.md descriptions against the Agent Skills spec and host limits, explains why two skills clash, checks a rewritten description keeps every trigger before writing it, moves long skill bodies into reference files read only when needed, parks rarely used skills where the agent can still find them, and audits the always-loaded instruction files and MCP settings. Use when the user asks why the wrong skill fired, to clean up or shorten skill descriptions or a long SKILL.md, to fix a skill conflict or overlap, how many tokens skills cost, to park or unpark a skill, to trim the startup context, or when a context-health selection line reports similar skills. Also for 'refresh skill-tidy' and 'is skill-tidy stale'. Measuring session size is context-health; per-skill cost and usage alone is Claude Code's /skill-doctor."
 metadata:
-  version: "0.2.0"
+  version: "0.2.1"
 ---
 
 # skill-tidy

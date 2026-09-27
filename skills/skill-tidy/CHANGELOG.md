@@ -4,6 +4,11 @@ Every change to [SKILL.md](SKILL.md) and its companions, newest first, each with
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:` (IDs or "user request"), `files:` (file and section), and a sentence on what changed. Cite section headings, not line numbers.
 
+### C-20260926-4 · 2026-09-26 · is_link fix for macOS and Windows runners, two lint false positives (v0.2.1)
+- because: CI run 36287630807 (macOS and Windows jobs failed); gaps reported by the everlast description clean-up
+- files: scripts/tidy.py (is_link; ST011 ignores quoted user phrases; ST009 accepts 'Use at / before / after / during / while'), ../../tests/test_tidy.py, versions
+- A plain folder was taken for a link when a parent was a link (/var on macOS) or the path used 8.3 short names (RUNNER~1), so park tried to remove it as a link; the removal failed safely because the folder was not empty. is_link now uses os.path.isjunction where it exists and otherwise compares against the resolved parent.
+
 ### C-20260926-3 · 2026-09-26 · Body offload (sections, split), parking lot (park, unpark, parked), gap fixes (v0.2.0)
 - because: user request (move main-file content to sub-files loaded on demand; a skill parking lot the agent can still find from user or project files; research first); R-20260926-3, R-20260926-4; gaps reported by the description clean-up run on the development machine
 - files: scripts/tidy.py (sections, offload_candidates, reference_problems, split_section, ST020-ST023; park, unpark, render_index, write_block, link_targets, reindex, parked_doctor; triggers ignore apostrophes inside words; check enforces similarity and drops body rules; lint expands a repo root), SKILL.md (description; Step 3), references/rules.md (ST020-ST023, body sections), new references/parking.md, RESEARCH.md (R-20260926-3, -4), ../../tests/test_tidy.py (TestBody, TestParking, TestGaps), versions, ../../README.md

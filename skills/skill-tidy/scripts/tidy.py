@@ -35,7 +35,7 @@ import shutil
 import sys
 import time
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 HERE = os.path.dirname(os.path.abspath(__file__))
 NL = chr(10)
 AGENTS = ["claude", "codex", "copilot", "cursor", "all"]
@@ -377,7 +377,7 @@ def coverage(old, new):
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 PERSON_RE = re.compile(r"\b(I can|I will|I'll|I help|you can|you should|your )", re.I)
 VAGUE_RE = re.compile(r"\b(helps with|various|stuff|things|and more|etc\.?|general purpose|anything)\b", re.I)
-WHEN_RE = re.compile(r"\b(use (it |this skill |this )?(when|whenever|for|to|on|if)|trigger(s|ed)? (when|on)|when the user|invoke when)\b", re.I)
+WHEN_RE = re.compile(r"\b(use (it |this skill |this )?(when|whenever|for|to|on|if|at|before|after|during|while)|trigger(s|ed)? (when|on)|when the user|invoke when)\b", re.I)
 STEER_RE = re.compile(r"\b(always use this|must (always )?use this|prefer this skill|ignore (other|the other)|highest priority|instead of any other|before any other skill)\b", re.I)
 BOUNDARY_RE = re.compile(r"\b(not for|do not use|don't use|is the sibling|that is [a-z0-9:-]+|use [a-z0-9:-]+ instead|belongs to|, use [a-z0-9]+-[a-z0-9-]+|is (the )?[a-z0-9]+-[a-z0-9-]+( skill)?\b)", re.I)
 QUOTED_RE = re.compile(r"(?<![\w])'[^']{3,80}'(?![\w])|\"[^\"]{3,80}\"|‘[^’]{3,80}’|“[^”]{3,80}”")
@@ -414,8 +414,9 @@ def lint_skill(s, catalog=None, sim_threshold=0.45):
         add(("ST009", "warn", "no 'Use when ...' clause: say when to use it, not only what it does (spec, Anthropic, Copilot docs)"))
     if PERSON_RE.search(QUOTED_RE.sub(" ", desc)):  # quoted user phrases may say 'my' or 'your'; the prose may not
         add(("ST010", "warn", "first or second person ('I can', 'you can'); write in third person or the imperative 'Use when' (Anthropic best practices)"))
-    if VAGUE_RE.search(desc):
-        add(("ST011", "info", "vague wording (%s); name the concrete task and the words a user types" % VAGUE_RE.search(desc).group(0)))
+    vague = VAGUE_RE.search(QUOTED_RE.sub(" ", desc))  # the user's own quoted words are allowed to be vague
+    if vague:
+        add(("ST011", "info", "vague wording (%s); name the concrete task and the words a user types" % vague.group(0)))
     if XML_RE.search(desc):
         add(("ST012", "error", "XML-like tag in the description (not allowed by Anthropic's skill rules)"))
     trig = triggers(desc)
@@ -658,7 +659,15 @@ def is_link(p):
     try:
         if os.path.islink(p):
             return True
-        return os.path.isdir(p) and _norm_dir(os.path.realpath(p)) != _norm_dir(os.path.abspath(p))
+        isj = getattr(os.path, "isjunction", None)  # Python 3.12+
+        if isj is not None:
+            return isj(p)
+        # Older Pythons: the entry is a link when it resolves somewhere other than inside its own resolved
+        # parent. Comparing against abspath instead misfires wherever a parent is a link (/var on macOS) or
+        # a path uses 8.3 short names (Windows runners).
+        p = os.path.abspath(p)
+        here = os.path.join(os.path.realpath(os.path.dirname(p)), os.path.basename(p))
+        return os.path.isdir(p) and _norm_dir(os.path.realpath(p)) != _norm_dir(here)
     except OSError:
         return False
 
