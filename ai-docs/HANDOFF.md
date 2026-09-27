@@ -10,7 +10,7 @@ Eval suite run and recorded (T-20260926-2, 6/6): cases in the root `evals/` fold
 See [INDEX.md](INDEX.md): skill-tidy is its own plugin; the script checks and the model rewrites once.
 
 ## Next single action
-Make `tidy.py` honour `CLAUDE_CONFIG_DIR` for the Claude Code roots (skills, plugins, settings), with a test in `tests/test_tidy.py`, then re-run action-1 under WSL2 and check it lists the plugin's skills.
+CLAUDE_CONFIG_DIR is honoured since 0.1.1 (TestConfigDir). Re-run action-1 under WSL2 to confirm it now lists the plugin skills; then decide with the user whether the repo goes public (privacy scan first, as context-health did).
 
 ## Gotchas
 Claude Code's listing budget unit is unsettled (characters per the skills docs, tokens per everlast's skill-budget); see RESEARCH.md Open questions. Copilot and Cursor skill roots in `roots_for` are the least certain part. `apply` refuses installed plugin copies by design: edit the source repo and reinstall.
