@@ -10,7 +10,7 @@ Eval suite run and recorded (T-20260926-2, 6/6): cases in the root `evals/` fold
 See [INDEX.md](INDEX.md): skill-tidy is its own plugin; the script checks and the model rewrites once.
 
 ## Next single action
-0.2.0 adds body offload (sections, split) and the parking lot (park, unpark, parked; references/parking.md). Next: run the eval suite again with a parking case (park a fixture skill, then a prompt that needs it: the agent must read its SKILL.md from the index), and add a trigger-coverage command that re-runs a skill's trigger evals after a rewrite (gap 7 from the clean-up run).
+0.2.1 is released (CI green on 3 OS). Open gaps from the 2026-09-26 clean-up runs, in order: (1) an evals helper that turns evals.json trigger/decoy prompts into claude plugin eval cases and runs them after a rewrite (both clean-up agents wrote one in scratch; the word-level trigger check cannot prove routing); (2) check --explain: per-term contributions to the closest similarity; (3) apply should print the path it was given, with forward slashes; (4) an eval case for parking (park a fixture, then a prompt that needs it). Descriptions on the development machine: all under 1,024 except the everscout plugin (handled in another session).
 
 ## Gotchas
 Claude Code's listing budget unit is unsettled (characters per the skills docs, tokens per everlast's skill-budget); see RESEARCH.md Open questions. Copilot and Cursor skill roots in `roots_for` are the least certain part. `apply` refuses installed plugin copies by design: edit the source repo and reinstall.
