@@ -210,6 +210,19 @@ class TestUsageBudgetOffload(Base):
         self.assertTrue(b["claude"]["over"])
         self.assertEqual(b["codex"]["budget_chars"], 400)
 
+    def test_headless_sessions_are_not_uses(self):
+        d = os.path.join(self.home, ".claude", "projects", "p2")
+        call = {"type": "assistant", "message": {"role": "assistant", "content": [
+            {"type": "tool_use", "name": "Skill", "input": {"skill": "feed-scan"}}]}}
+        sdk = [{"type": "user", "entrypoint": "sdk-cli", "message": {"content": "x"}}, call]
+        temp = [{"type": "user", "entrypoint": "claude-vscode", "cwd": tempfile.gettempdir(), "message": {"content": "x"}}, call]
+        person = [{"type": "user", "entrypoint": "claude-vscode", "cwd": os.path.abspath(os.sep + "work-not-temp"),
+                   "message": {"content": "x"}}, call]
+        for name, rows in (("a.jsonl", sdk), ("b.jsonl", temp), ("c.jsonl", person)):
+            write(os.path.join(d, name), "\n".join(json.dumps(r) for r in rows) + "\n")
+        self.assertEqual(tidy.usage(30), {"feed-scan": 1})
+        self.assertEqual(tidy.usage(30, headless=True), {"feed-scan": 2})
+
     def test_harvest_brief(self):
         skill(self.user, "feed-scan", FEED)
         skill(self.user, "radar-sweep", FEED + " Daily.")
