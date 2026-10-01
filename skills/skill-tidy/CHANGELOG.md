@@ -4,6 +4,11 @@ Every change to [SKILL.md](SKILL.md) and its companions, newest first, each with
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:` (IDs or "user request"), `files:` (file and section), and a sentence on what changed. Cite section headings, not line numbers.
 
+### C-20260930-1 · 2026-09-30 · usage, offload, parked suggest and harvest leave headless runs out (v0.2.3)
+- because: L-002 (eval suites inflated usage: wikiwright read 70 uses, 62 of them headless test runs, so `offload` and `parked suggest` would never have offered it and `harvest` read eval prompts as missed triggers); the owner's skill worth study of 2026-09-30
+- files: scripts/tidy.py (headless_session; claude_events(headless=); usage(headless=); cmd_usage shows `+N headless` and a `headless` map in --json), SKILL.md (Step 1 usage line), ../../tests/test_tidy.py (test_headless_sessions_are_not_uses), versions
+- A session is headless when its entrypoint starts with `sdk` or its working folder is under the temp directory; a `claude -p` child started from an IDE session logs the IDE's entrypoint, so the folder is the reliable sign. Every consumer of usage (usage, offload, parked suggest, harvest) now sees real use only.
+
 ### C-20260926-5 · 2026-09-26 · Park removes and unpark restores alias links; doctor finds dangling links; parked alias (v0.2.2)
 - because: user request (parking a real folder left other hosts' junctions to it dangling, and unpark did not bring them back)
 - files: scripts/tidy.py (link_roots, find_aliases, dangling_links, add_alias; park, unpark, parked_doctor, parked alias), references/parking.md (Modes), ../../tests/test_tidy.py (TestParking), versions

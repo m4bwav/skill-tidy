@@ -2,7 +2,7 @@
 name: skill-tidy
 description: "Fix skills that compete for the same prompts and cut what the skill catalog costs in tokens. Lints SKILL.md descriptions against the Agent Skills spec and host limits, explains why two skills clash, checks a rewritten description keeps every trigger before writing it, moves long skill bodies into reference files read only when needed, parks rarely used skills where the agent can still find them, and audits the always-loaded instruction files and MCP settings. Use when the user asks why the wrong skill fired, to clean up or shorten skill descriptions or a long SKILL.md, to fix a skill conflict or overlap, how many tokens skills cost, to park or unpark a skill, to trim the startup context, or when a context-health selection line reports similar skills. Also for 'refresh skill-tidy' and 'is skill-tidy stale'. Measuring session size is context-health; per-skill cost and usage alone is Claude Code's /skill-doctor."
 metadata:
-  version: "0.2.2"
+  version: "0.2.3"
 ---
 
 # skill-tidy
@@ -22,7 +22,7 @@ Run what the request needs, not everything:
 - `TIDY conflicts`: pairs at TF-IDF cosine 0.45+ (0.65+ near-duplicate), the words both share, trigger phrases both claim, and a starting boundary sentence for each side.
 - `TIDY lint [SKILL_DIR ...]`: rules ST001-ST019; errors are spec or host limits, warnings are research-backed style. Exit code 1 when an error exists.
 - `TIDY budget --window <model window>`: listing size against Claude Code's 1% budget (over it, least-used descriptions are dropped), Codex's 2% / 8,000 chars, the 1,536 cut and the spec's 1,024.
-- `TIDY usage --days 30`, `TIDY startup`: invocations from transcripts; the instruction chain, memory and MCP settings.
+- `TIDY usage --days 30`, `TIDY startup`: invocations from transcripts (headless eval and script runs shown apart as `+N headless`, never counted as use); the instruction chain, memory and MCP settings.
 
 ## Step 2: fix a conflict (no functionality lost)
 

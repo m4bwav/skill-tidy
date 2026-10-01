@@ -33,6 +33,7 @@ import os
 import re
 import shutil
 import sys
+import tempfile
 import time
 
 VERSION = "0.2.2"
@@ -1127,39 +1128,69 @@ CMD_RE = re.compile(r"<command-name>/?([A-Za-z0-9:_-]+)</command-name>")
 CODEX_SKILL_RE = re.compile(r"<skill>\s*<name>([^<]+)</name>")
 
 
-def claude_events(days):
+def headless_session(lines):
+    """True for a `claude -p` or SDK session (an eval, a script), not a person's: an `sdk` entrypoint, or a working
+    folder under the temp directory. A -p child started from an IDE session logs the IDE's entrypoint, so the folder
+    is the reliable sign (2026-09-30: eval suites run from VS Code were logged as claude-vscode)."""
+    entry = cwd = None
+    for line in lines[:80]:
+        if entry is None:
+            m = re.search(r'"entrypoint"\s*:\s*"([^"]+)"', line)
+            entry = m.group(1) if m else None
+        if cwd is None:
+            m = re.search(r'"cwd"\s*:\s*"((?:[^"\\]|\\.)*)"', line)
+            if m:
+                try:
+                    cwd = json.loads('"%s"' % m.group(1))
+                except ValueError:
+                    cwd = None
+        if entry and cwd:
+            break
+    if str(entry or "").startswith("sdk"):
+        return True
+    if not cwd:
+        return False
+    c = os.path.normcase(os.path.abspath(cwd))
+    roots = {tempfile.gettempdir(), os.environ.get("TEMP") or "", os.environ.get("TMP") or "", "/tmp", "/var/folders"}
+    return any(r and c.startswith(os.path.normcase(os.path.abspath(r))) for r in roots)
+
+
+def claude_events(days, headless=False):
     """Yield (session, kind, value, text) from Claude Code transcripts: ('prompt', None, text),
     ('skill', name, None) for a Skill tool call, ('command', name, None) for a typed slash command.
-    The JSONL format is internal and unstable; unknown lines are skipped."""
+    Headless sessions (evals, scripts) are skipped unless headless=True, which yields only those: a test run is not
+    a use. The JSONL format is internal and unstable; unknown lines are skipped."""
     for f in _recent(os.path.join(claude_dir(), "projects", "**", "*.jsonl"), days):
         sid = os.path.basename(f)
         try:
-            fh = open(f, "r", encoding="utf-8", errors="replace")
+            with open(f, "r", encoding="utf-8", errors="replace") as fh:
+                lines = fh.readlines()
         except OSError:
             continue
-        with fh:
-            for line in fh:
-                if '"Skill"' not in line and '"user"' not in line:
-                    continue
-                try:
-                    o = json.loads(line)
-                except ValueError:
-                    continue
-                msg = o.get("message") if isinstance(o.get("message"), dict) else {}
-                content = msg.get("content")
-                if o.get("type") == "user" and not o.get("isSidechain"):
-                    text = content if isinstance(content, str) else " ".join(
-                        c.get("text", "") for c in content if isinstance(c, dict) and c.get("type") == "text") if isinstance(content, list) else ""
-                    for m in CMD_RE.finditer(text or ""):
-                        yield sid, "command", m.group(1), None
-                    if text and not text.startswith("<") and not o.get("isMeta"):
-                        yield sid, "prompt", None, text
-                elif o.get("type") == "assistant" and isinstance(content, list):
-                    for c in content:
-                        if isinstance(c, dict) and c.get("type") == "tool_use" and c.get("name") == "Skill":
-                            nm = (c.get("input") or {}).get("skill")
-                            if nm:
-                                yield sid, "skill", str(nm), None
+        if headless_session(lines) != headless:
+            continue
+        for line in lines:
+            if '"Skill"' not in line and '"user"' not in line:
+                continue
+            try:
+                o = json.loads(line)
+            except ValueError:
+                continue
+            msg = o.get("message") if isinstance(o.get("message"), dict) else {}
+            content = msg.get("content")
+            if o.get("type") == "user" and not o.get("isSidechain"):
+                text = content if isinstance(content, str) else " ".join(
+                    c.get("text", "") for c in content if isinstance(c, dict) and c.get("type") == "text") if isinstance(content, list) else ""
+                for m in CMD_RE.finditer(text or ""):
+                    yield sid, "command", m.group(1), None
+                if text and not text.startswith("<") and not o.get("isMeta"):
+                    yield sid, "prompt", None, text
+            elif o.get("type") == "assistant" and isinstance(content, list):
+                for c in content:
+                    if isinstance(c, dict) and c.get("type") == "tool_use" and c.get("name") == "Skill":
+                        nm = (c.get("input") or {}).get("skill")
+                        if nm:
+                            yield sid, "skill", str(nm), None
 
 
 def codex_events(days):
@@ -1168,9 +1199,12 @@ def codex_events(days):
             yield os.path.basename(f), "skill", m.group(1).strip(), None
 
 
-def usage(days):
+def usage(days, headless=False):
+    """Invocations per skill. Headless Claude Code sessions (evals, scripts) are left out; headless=True counts only
+    them, so a report can show test traffic beside real use."""
     counts = {}
-    for _, kind, name, _ in list(claude_events(days)) + list(codex_events(days)):
+    events = list(claude_events(days, headless=headless)) + ([] if headless else list(codex_events(days)))
+    for _, kind, name, _ in events:
         if kind in ("skill", "command"):
             key = name.split(":")[-1]
             counts[key] = counts.get(key, 0) + 1
@@ -1552,16 +1586,19 @@ def cmd_budget(a):
 
 def cmd_usage(a):
     c = usage(a.days)
+    h = usage(a.days, headless=True)
     sk = listed(_catalog(a))
-    rows = [(s["id"], c.get(s["name"], 0), s["listed_chars"]) for s in sk]
+    rows = [(s["id"], c.get(s["name"], 0), s["listed_chars"], h.get(s["name"], 0)) for s in sk]
     rows.sort(key=lambda r: (r[1], -r[2]))
-    lines = ["skill invocations in the last %d days (Claude Code Skill calls and slash commands, Codex skill blocks)" % a.days]
-    for sid, n, ch in rows:
-        lines.append("  %4d  %-44s %5d chars listed" % (n, sid[:44], ch))
+    lines = ["skill invocations in the last %d days (Claude Code Skill calls and slash commands, Codex skill blocks; "
+             "headless eval and script runs shown apart, never as use)" % a.days]
+    for sid, n, ch, hn in rows:
+        lines.append("  %4d  %-44s %5d chars listed%s" % (n, sid[:44], ch, "  (+%d headless)" % hn if hn else ""))
     unused = [r for r in rows if r[1] == 0]
     lines.append("%d of %d listed skills unused; their descriptions cost ~%s tokens every session" % (
         len(unused), len(rows), k(est_tokens(sum(r[2] for r in unused)))))
-    out({"days": a.days, "counts": {r[0]: r[1] for r in rows}}, a.json, lines)
+    out({"days": a.days, "counts": {r[0]: r[1] for r in rows}, "headless": {r[0]: r[3] for r in rows if r[3]}},
+        a.json, lines)
     return 0
 
 
