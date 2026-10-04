@@ -35,6 +35,12 @@ Every command takes `--agent claude|codex|copilot|cursor|all`, `--project PATH` 
 
 The skill keeps its research current on a schedule (tier fast, every 14 days at most): host limits, settings and the selection research are re-checked from primary sources, and every change is logged with its reason in [CHANGELOG.md](skills/skill-tidy/CHANGELOG.md). The research basis is in [RESEARCH.md](skills/skill-tidy/RESEARCH.md).
 
+## Privacy
+
+skill-tidy collects nothing and makes no network calls. The CLI (`skills/skill-tidy/scripts/tidy.py`) is one standard-library Python file that runs on your machine. To do its job it reads local files only: skill folders, host settings and instruction files (CLAUDE.md, AGENTS.md, `~/.claude/settings.json`, `~/.claude.json`), and, for `usage`, `offload` and `harvest`, the session transcripts Claude Code and Codex already keep under `~/.claude/projects` and `~/.codex/sessions`. It counts skill names and matches prompts in memory and prints the result; it does not copy transcripts anywhere. It writes only when you pass an explicit flag (`apply`, `offload --write`, `split`, `park`, `unpark`), and then only to your own skill and settings files, with a backup and the parking lot kept under `~/.skill-tidy` on your machine. It reads no credentials and no API keys.
+
+The one route that reaches the internet is the evergreen refresh described above. When the skill's research is due, the agent runs web searches and fetches public documentation pages with its own web tools. It may also run `npx skills@1.7.0 find` to look up install counts on skills.sh, which downloads that package from the npm registry. Those requests carry search terms about the skill's subject, not your files. Whatever your AI app does with the conversation is covered by that app's own privacy policy.
+
 ## Versioning
 
 Semantic versions; tags `vX.Y.Z` with a GitHub Release each. MIT licence.

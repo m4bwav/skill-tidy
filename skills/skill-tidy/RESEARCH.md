@@ -32,7 +32,7 @@ Subject:
 
 Tooling:
 
-- `path:SKILL.md "description" lint OR overlap OR conflict` on GitHub code search, recently updated; `npx skills find "skill lint"`; skills.sh for install counts
+- `path:SKILL.md "description" lint OR overlap OR conflict` on GitHub code search, recently updated; `npx skills@1.7.0 find "skill lint"`; skills.sh for install counts
 - `"skill description" linter OR optimizer OR conflict "claude code" OR codex <year> site:github.com`
 - Supersession sweep: `/skill-doctor` release notes (does it start judging descriptions?), skills-lint, skillscheck
 

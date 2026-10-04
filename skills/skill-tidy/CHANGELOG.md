@@ -4,6 +4,11 @@ Every change to [SKILL.md](SKILL.md) and its companions, newest first, each with
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:` (IDs or "user request"), `files:` (file and section), and a sentence on what changed. Cite section headings, not line numbers.
 
+### C-20261003-1 · 2026-10-03 · Ready for the Claude plugin directory (v0.2.4)
+- because: user request (submission to the Claude plugin directory, pre-submission checklist)
+- files: ../../.claude-plugin/plugin.json (documentationUrl, supportUrl, privacyPolicyUrl), ../../README.md (Privacy), MAINTENANCE.md and RESEARCH.md (Search plan: `npx skills@1.7.0`), scripts/tidy.py (VERSION, left at 0.2.2 by 0.2.3), versions
+- The directory asks for a privacy policy URL and pinned launcher packages. The README now says what the CLI reads (local files only, no network, no credentials) and that only the research refresh goes online; the skills CLI the refresh may run is pinned to 1.7.0, tested with `npx -y skills@1.7.0 find "skill lint"`.
+
 ### C-20260930-1 · 2026-09-30 · usage, offload, parked suggest and harvest leave headless runs out (v0.2.3)
 - because: L-002 (eval suites inflated usage: wikiwright read 70 uses, 62 of them headless test runs, so `offload` and `parked suggest` would never have offered it and `harvest` read eval prompts as missed triggers); the owner's skill worth study of 2026-09-30
 - files: scripts/tidy.py (headless_session; claude_events(headless=); usage(headless=); cmd_usage shows `+N headless` and a `headless` map in --json), SKILL.md (Step 1 usage line), ../../tests/test_tidy.py (test_headless_sessions_are_not_uses), versions

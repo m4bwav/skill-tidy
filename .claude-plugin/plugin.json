@@ -1,6 +1,6 @@
 {
   "name": "skill-tidy",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Keep an agent's skill catalog cheap and unambiguous: lint SKILL.md descriptions against the Agent Skills spec and host limits, explain and fix skills that compete for the same prompts without losing triggers, find never-used skills and hide them to save tokens, and audit the always-loaded startup context. Research-backed rules that refresh themselves (evergreen). Claude Code, Codex, Copilot, Cursor.",
   "author": {
     "name": "Mark Rogers"
@@ -17,5 +17,8 @@
   ],
   "skills": "./skills",
   "repository": "https://github.com/m4bwav/skill-tidy",
-  "homepage": "https://github.com/m4bwav/skill-tidy"
+  "homepage": "https://github.com/m4bwav/skill-tidy",
+  "documentationUrl": "https://github.com/m4bwav/skill-tidy#readme",
+  "supportUrl": "https://github.com/m4bwav/skill-tidy/issues",
+  "privacyPolicyUrl": "https://github.com/m4bwav/skill-tidy#privacy"
 }
