@@ -1,5 +1,7 @@
 # skill-tidy
 
+![A neat craftsman's cabinet of many small labelled wooden drawers holding tools, a robot hand sorting tools into the right drawers, tidy and orderly](https://raw.githubusercontent.com/m4bwav/skill-tidy/master/.github/images/banner.jpg)
+
 Keep an AI agent's skill catalog cheap and unambiguous. Works with Agent Skills (`SKILL.md`) in Claude Code, Codex, GitHub Copilot and Cursor.
 
 Every installed skill puts its name and description in front of the model at the start of every session. That costs tokens, and past about 20-30 skills it costs accuracy: the model picks the wrong skill or none. Research in 2026 found that overlapping descriptions, more than the raw count, cause those misses, and that one careful rewrite of a description fixes most of them. skill-tidy finds the problems with a script and helps fix them without losing what each skill is triggered by.
