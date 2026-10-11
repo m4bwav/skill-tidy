@@ -8,6 +8,13 @@ Entry shape: `### T-YYYYMMDD-n · date · harness · env · passed/total`, then 
 
 ## Runs
 
+### T-20261011-1 · 2026-10-11 · claude plugin eval 2.1.281 (default model, 1 run per case, --ablation none) · Windows 11 native · 4/4
+- Why: the description changed in the 2026-10-11 refresh (PR #5); trigger and decoy cases only. Command as in T-20260926-2: `claude plugin eval . --ablation none --no-publish -j 4 --tag trigger --trust-plugin`, 4/4, 0.61 USD, 40 s.
+- trigger-1 (wrong skill fires, clean up descriptions), trigger-2 (token cost of skills) · trigger · pass · `Skill` called once each, then the 3-turn cap (the case's limit).
+- decoy-1 (session size), decoy-2 (new git-log skill) · trigger · pass · skill-tidy not called.
+- One run per case, as in earlier entries; action-1 and outcome-1 (WSL2 cases) not rerun because the body's scripts did not change.
+- led to: none
+
 ### T-20260926-2 · 2026-09-26 · claude plugin eval 2.1.281 (default model, 1 run per case, --ablation none) · Windows 11 native for trigger and decoy, WSL2 Ubuntu (bwrap, socat) for the Bash cases · 6/6
 - Suite: the root `evals/` folder, cases converted from `evals/evals.json`. Trigger and decoy graders are `tool_used` on Skill with a regex on the skill name (max 0 for a decoy). Native: `claude plugin eval . --ablation none --no-publish -j 4 --tag trigger --trust-plugin`, 4/4, 0.78 USD, 72 s. WSL2: `--tag bash --scaffold --allow-tools Bash Write Edit`, 2/2, 0.36 USD, 31 s.
 - trigger-1, trigger-2 · trigger · pass · `Skill(skill-tidy:skill-tidy)` called once each (both then hit the 3-turn cap, which is the case's limit, not a failure).
