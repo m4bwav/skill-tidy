@@ -4,6 +4,11 @@ Every change to [SKILL.md](SKILL.md) and its companions, newest first, each with
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:` (IDs or "user request"), `files:` (file and section), and a sentence on what changed. Cite section headings, not line numbers.
 
+### C-20261011-1 · 2026-10-11 · Refresh: /doctor prompt-audit named, first-read conflicts, the character budget
+- because: R-20261011-1, R-20261011-2
+- files: SKILL.md (description boundary sentence; Step 1 budget line; Step 2 item 7; Step 3 Startup), RESEARCH.md (Current understanding: Existing tools; Open questions; Search plan; two findings)
+- The description hands stale or contradicting instruction files to `/doctor prompt-audit`; Step 2 says what to do when rewording cannot separate two installed skills; the budget line names `SLASH_COMMAND_TOOL_CHAR_BUDGET`. No code change: the Codex roots, an unknown-frontmatter-key rule and the env var in `budget` are open questions.
+
 ### C-20261003-1 · 2026-10-03 · Ready for the Claude plugin directory (v0.2.4)
 - because: user request (submission to the Claude plugin directory, pre-submission checklist)
 - files: ../../.claude-plugin/plugin.json (documentationUrl, supportUrl, privacyPolicyUrl), ../../README.md (Privacy), MAINTENANCE.md and RESEARCH.md (Search plan: `npx skills@1.7.0`), scripts/tidy.py (VERSION, left at 0.2.2 by 0.2.3), versions

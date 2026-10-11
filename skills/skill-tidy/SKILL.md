@@ -1,6 +1,6 @@
 ---
 name: skill-tidy
-description: "Fix skills that compete for the same prompts and cut what the skill catalog costs in tokens. Lints SKILL.md descriptions against the Agent Skills spec and host limits, explains why two skills clash, checks a rewritten description keeps every trigger before writing it, moves long skill bodies into reference files read only when needed, parks rarely used skills where the agent can still find them, and audits the always-loaded instruction files and MCP settings. Use when the user asks why the wrong skill fired, to clean up or shorten skill descriptions or a long SKILL.md, to fix a skill conflict or overlap, how many tokens skills cost, to park or unpark a skill, to trim the startup context, or when a context-health selection line reports similar skills. Also for 'refresh skill-tidy' and 'is skill-tidy stale'. Measuring session size is context-health; per-skill cost and usage alone is Claude Code's /skill-doctor."
+description: "Fix skills that compete for the same prompts and cut what the skill catalog costs in tokens. Lints SKILL.md descriptions against the Agent Skills spec and host limits, explains why two skills clash, checks a rewritten description keeps every trigger before writing it, moves long skill bodies into reference files read only when needed, parks rarely used skills where the agent can still find them, and audits the always-loaded instruction files and MCP settings. Use when the user asks why the wrong skill fired, to clean up or shorten skill descriptions or a long SKILL.md, to fix a skill conflict or overlap, how many tokens skills cost, to park or unpark a skill, to trim the startup context, or when a context-health selection line reports similar skills. Also for 'refresh skill-tidy' and 'is skill-tidy stale'. Measuring session size is context-health; per-skill cost and usage alone is Claude Code's /skill-doctor; stale or contradicting instruction files alone are /doctor prompt-audit."
 metadata:
   version: "0.2.4"
 ---
@@ -21,7 +21,7 @@ Run what the request needs, not everything:
 
 - `TIDY conflicts`: pairs at TF-IDF cosine 0.45+ (0.65+ near-duplicate), the words both share, trigger phrases both claim, and a starting boundary sentence for each side.
 - `TIDY lint [SKILL_DIR ...]`: rules ST001-ST019; errors are spec or host limits, warnings are research-backed style. Exit code 1 when an error exists.
-- `TIDY budget --window <model window>`: listing size against Claude Code's 1% budget (over it, least-used descriptions are dropped), Codex's 2% / 8,000 chars, the 1,536 cut and the spec's 1,024.
+- `TIDY budget --window <model window>`: listing size against Claude Code's 1% character budget (over it, least-used descriptions are dropped; `SLASH_COMMAND_TOOL_CHAR_BUDGET` fixes it in characters, and `/doctor` estimates it), Codex's 2% / 8,000 chars, the 1,536 cut and the spec's 1,024.
 - `TIDY usage --days 30`, `TIDY startup`: invocations from transcripts (headless eval and script runs shown apart as `+N headless`, never counted as use); the instruction chain, memory and MCP settings.
 
 ## Step 2: fix a conflict (no functionality lost)
@@ -32,6 +32,7 @@ Run what the request needs, not everything:
 4. Write ONE rewrite of the weaker or longer description (editing both sides adds under 0.5% in the research; edit both only when both break a limit). Key use case and its trigger words first; what it does plus "Use when"; third person or imperative; at most 1,024 chars, about 100-200 words; no steering text; end with one short boundary sentence naming the sibling. Keep triggers in `description`, not `when_to_use` (only Claude Code reads that).
 5. `TIDY check <skill> --new <file>` must print `OK`: no errors, no lost trigger, closest similarity lower than before. Then `TIDY apply <skill> --new <file>` (keeps a backup under `~/.skill-tidy/backups/`). Installed plugin copies are refused: edit the plugin's source repository and reinstall.
 6. Confirm with `TIDY conflicts` and report the before and after scores.
+7. When rewording cannot separate two installed skills, say so: in a 2026 study of co-installed similar skills, install location decided the winner more than listing order, the conflict was settled at the first skill read, and the only mitigation tested was a hook at that first read (arXiv 2610.11647). Offer parking or disabling one (Step 3) before a hook; judge the result from transcripts, since the final reply rarely names the skill that ran.
 
 ## Step 3: save tokens
 
@@ -40,7 +41,7 @@ Run what the request needs, not everything:
 - Long bodies (ST020): a SKILL.md body loads in full every time the skill runs; reference files load only when read. `TIDY sections <skill>` sizes each section and marks supplementary ones (examples, tables, per-host notes, templates, background). For each marked section decide whether every run needs it; if not, `TIDY split <skill> --section "<heading>" --when "<the tasks that need it>"` moves it to `references/<slug>.md`, leaves `Read <file> when <condition>.` under the heading and adds a contents list to files over 100 lines. Keep the steps every run follows in SKILL.md. Keep references one level deep (ST021). Source folders only; commit in the skill's repo.
 - Rarely used skills: park them. `TIDY parked suggest` ranks candidates; after the user agrees, `TIDY park <name>` (or `--plugin <plugin>`, `--soft`, `--scope project`) moves each out of every scanned folder and writes a grouped one-line index into the always-read instruction files, so the agent still finds and reads it on demand. `TIDY unpark <name>` restores it; `TIDY parked doctor` checks the lot and dangling links; `TIDY parked alias <name> <path>` records a link that unpark should recreate. Read [references/parking.md](references/parking.md) before the first park or when the user asks how parking works.
 - Rarely wanted, manual-only skills: suggest `disable-model-invocation: true` in their front matter (no listing cost; `/name` still works). Skills tied to file types: suggest `paths:` globs.
-- Startup: `TIDY startup` shows the biggest instruction files and imports, `alwaysLoad` MCP servers and whether tool search is off. Suggest moving rarely needed detail from CLAUDE.md or AGENTS.md into files loaded on demand.
+- Startup: `TIDY startup` shows the biggest instruction files and imports, `alwaysLoad` MCP servers and whether tool search is off. Suggest moving rarely needed detail from CLAUDE.md or AGENTS.md into files loaded on demand. For stale paths, stale commands and contradicting instruction files, point to Claude Code's `/doctor prompt-audit` (v2.1.283) rather than repeating it.
 
 ## Step 4: report
 
