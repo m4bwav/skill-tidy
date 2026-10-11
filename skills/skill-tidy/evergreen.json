@@ -13,9 +13,9 @@
   "source": null,
   "topic": "Agent Skills description quality and selection conflicts, skill catalog listing budgets and token cost per host (Claude Code, Codex, Copilot, Cursor), and startup-context trimming",
   "tier": "fast",
-  "interval_days": 14,
-  "last_checked": "2026-09-26",
-  "next_due": "2026-10-10",
+  "interval_days": 9.33,
+  "last_checked": "2026-10-11",
+  "next_due": "2026-10-20",
   "verify_at_use": false,
   "volatile_claims": [
     "Parking-lot design (inline index in always-read instruction files, groups of 8 or fewer) rests on one vendor eval (Vercel 2026-01-27) and routing research; no study tests an index line format",
@@ -35,12 +35,18 @@
       "m": null,
       "interval_after": 14,
       "note": "created"
+    },
+    {
+      "date": "2026-10-11",
+      "m": 0.45,
+      "interval_after": 9.33,
+      "note": "refresh 2026-10-11: /doctor prompt-audit named in boundary, first-read conflict study 2610.11647, char budget confirmed; cost: searches 8 · fetches 21 · tool calls 37"
     }
   ],
   "counts": {
     "learnings": 0,
     "changes": 3,
-    "research": 2,
+    "research": 3,
     "tests": 2
   },
   "consolidate_every": 25,
