@@ -192,7 +192,10 @@ def roots_for(agent, project=None):
         "codex": [j(h, ".agents", "skills"), j(h, ".codex", "skills")] + ([j(project, ".agents", "skills")] if project else []),
         "copilot": [j(h, ".copilot", "skills"), j(claude_dir(), "skills"), j(h, ".agents", "skills")]
         + ([j(project, ".github", "skills"), j(project, ".claude", "skills"), j(project, ".agents", "skills")] if project else []),
-        "cursor": [j(h, ".cursor", "skills")] + ([j(project, ".cursor", "skills"), j(project, ".agents", "skills")] if project else []),
+        # Cursor reads its own and the Agent Skills roots, plus Claude Code and Codex roots for compatibility.
+        "cursor": [j(h, ".agents", "skills"), j(h, ".cursor", "skills"), j(claude_dir(), "skills"), j(h, ".codex", "skills")]
+        + ([j(project, ".agents", "skills"), j(project, ".cursor", "skills"), j(project, ".claude", "skills"),
+            j(project, ".codex", "skills")] if project else []),
     }
     hosts = ["claude", "codex", "copilot", "cursor"] if agent == "all" else [agent]
     out = []
@@ -615,7 +618,7 @@ def split_section(path, heading, to_rel, when):
 # selection) and stay findable through a short index written INTO the instruction files the agent always
 # reads. Inline, not a pointer: Vercel's evals (2026-01-27) had an 8 KB index in AGENTS.md at 100% while
 # skills the agent had to decide to invoke sat at 53-79%, never invoked in 56% of cases; Claude Code
-# re-injects the project CLAUDE.md after compaction but not the skill listing. Groups of at most 8 follow
+# re-injects the project CLAUDE.md after compaction (the skill listing too since v2.1.304). Groups of at most 8 follow
 # the hierarchical-routing result (arXiv 2601.04748: 4-8 items per level). Research: RESEARCH.md R-20260926-4.
 
 PARK_DIRNAME = "parked-skills"

@@ -4,6 +4,11 @@ Every change to [SKILL.md](SKILL.md) and its companions, newest first, each with
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:` (IDs or "user request"), `files:` (file and section), and a sentence on what changed. Cite section headings, not line numbers.
 
+### C-20261023-1 · 2026-10-23 · Refresh: Cursor roots, routing collapse, skill-reach, Codex budget override
+- because: R-20261023-1, R-20261023-2, R-20261023-3
+- files: scripts/tidy.py (roots_for cursor entry; parking-lot comment on compaction), ../../tests/test_tidy.py (TestScan test_cursor_reads_claude_and_codex_roots), SKILL.md (intro; Step 1 budget line; Step 2 item 6), RESEARCH.md (Current understanding; Open questions; Search plan; three findings)
+- Cursor scans now include the `~/.agents`, `.claude` and `.codex` roots its docs list; the intro adds that very large catalogs collapse routing even without overlap; Step 2 points to google/skill-reach for live routing probes; the budget line names Codex's `skills.max_context_tokens`. No version bump (left for the owner).
+
 ### C-20261011-1 · 2026-10-11 · Refresh: /doctor prompt-audit named, first-read conflicts, the character budget
 - because: R-20261011-1, R-20261011-2
 - files: SKILL.md (description boundary sentence; Step 1 budget line; Step 2 item 7; Step 3 Startup), RESEARCH.md (Current understanding: Existing tools; Open questions; Search plan; two findings)

@@ -8,6 +8,13 @@ Entry shape: `### T-YYYYMMDD-n · date · harness · env · passed/total`, then 
 
 ## Runs
 
+### T-20261023-1 · 2026-10-23 · claude plugin eval 2.1.281 (default model, 1 run per case, --ablation none) · Windows 11 native · 4/4
+- Why: the 2026-10-23 refresh edited SKILL.md's body (intro, Step 1, Step 2) and tidy.py's Cursor roots; the description did not change. `claude plugin eval . --ablation none --no-publish -j 4 --tag trigger --trust-plugin`, 4/4, 0.77 USD, 61 s. Unit tests 26/26 (new cursor-roots test).
+- trigger-1, trigger-2 · trigger · pass · `Skill` called once each, then the 3-turn cap.
+- decoy-1, decoy-2 · trigger · pass · skill-tidy not called.
+- action-1 and outcome-1 (WSL2) not rerun: the scripts they drive did not change.
+- led to: none
+
 ### T-20261011-1 · 2026-10-11 · claude plugin eval 2.1.281 (default model, 1 run per case, --ablation none) · Windows 11 native · 4/4
 - Why: the description changed in the 2026-10-11 refresh (PR #5); trigger and decoy cases only. Command as in T-20260926-2: `claude plugin eval . --ablation none --no-publish -j 4 --tag trigger --trust-plugin`, 4/4, 0.61 USD, 40 s.
 - trigger-1 (wrong skill fires, clean up descriptions), trigger-2 (token cost of skills) · trigger · pass · `Skill` called once each, then the 3-turn cap (the case's limit).

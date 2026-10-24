@@ -86,6 +86,12 @@ class TestScan(Base):
         self.assertEqual(len(tidy.scan("all", self.proj)), 5)  # the .agents copy of painter is a mirror (same name and text): counted once
         self.assertEqual(sorted(s["id"] for s in tidy.scan("codex", self.proj)), ["painter"])
 
+    def test_cursor_reads_claude_and_codex_roots(self):
+        skill(self.user, "feed-scan", FEED)
+        skill(os.path.join(self.home, ".codex", "skills"), "painter", PAINT)
+        skill(os.path.join(self.proj, ".claude", "skills"), "local-one", FEED + " Local.")
+        self.assertEqual(sorted(s["id"] for s in tidy.scan("cursor", self.proj)), ["feed-scan", "local-one", "painter"])
+
 
 class TestLint(Base):
     def rules(self, desc, extra="", name="demo", body="# b\n"):
