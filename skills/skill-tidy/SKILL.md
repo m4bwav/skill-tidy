@@ -7,7 +7,7 @@ metadata:
 
 # skill-tidy
 
-A skill catalog costs tokens every session and, past about 20-30 skills, costs selection accuracy; overlapping descriptions cost more than raw count (RESEARCH.md). This skill finds the problems with a script and fixes them with judgment, one rewrite per skill.
+A skill catalog costs tokens every session and, past about 20-30 skills, costs selection accuracy; overlapping descriptions cost more than raw count, and at very large catalogs (about 1,000) irrelevant descriptions alone make agents stop loading skills, which hiding those descriptions largely undid (RESEARCH.md). This skill finds the problems with a script and fixes them with judgment, one rewrite per skill.
 
 `TIDY` below means `python "<this folder>/scripts/tidy.py"` (`python3` on macOS and Linux). Every command takes `--agent claude|codex|copilot|cursor|all` (default claude), `--project PATH` (default cwd) and `--json`. Rules and their evidence: [references/rules.md](references/rules.md).
 
@@ -21,7 +21,7 @@ Run what the request needs, not everything:
 
 - `TIDY conflicts`: pairs at TF-IDF cosine 0.45+ (0.65+ near-duplicate), the words both share, trigger phrases both claim, and a starting boundary sentence for each side.
 - `TIDY lint [SKILL_DIR ...]`: rules ST001-ST019; errors are spec or host limits, warnings are research-backed style. Exit code 1 when an error exists.
-- `TIDY budget --window <model window>`: listing size against Claude Code's 1% character budget (over it, least-used descriptions are dropped; `SLASH_COMMAND_TOOL_CHAR_BUDGET` fixes it in characters, and `/doctor` estimates it), Codex's 2% / 8,000 chars, the 1,536 cut and the spec's 1,024.
+- `TIDY budget --window <model window>`: listing size against Claude Code's 1% character budget (over it, least-used descriptions are dropped; `SLASH_COMMAND_TOOL_CHAR_BUDGET` fixes it in characters, and `/doctor` estimates it), Codex's 2% / 8,000 chars (`skills.max_context_tokens` in `~/.codex/config.toml` overrides it, up to 10,000 tokens), the 1,536 cut and the spec's 1,024.
 - `TIDY usage --days 30`, `TIDY startup`: invocations from transcripts (headless eval and script runs shown apart as `+N headless`, never counted as use); the instruction chain, memory and MCP settings.
 
 ## Step 2: fix a conflict (no functionality lost)
@@ -31,7 +31,7 @@ Run what the request needs, not everything:
 3. Optional evidence: `TIDY harvest <skill>` writes a brief with prompts that matched but did not invoke it and invocations that look unrelated. Use it as the false-positive and false-negative input.
 4. Write ONE rewrite of the weaker or longer description (editing both sides adds under 0.5% in the research; edit both only when both break a limit). Key use case and its trigger words first; what it does plus "Use when"; third person or imperative; at most 1,024 chars, about 100-200 words; no steering text; end with one short boundary sentence naming the sibling. Keep triggers in `description`, not `when_to_use` (only Claude Code reads that).
 5. `TIDY check <skill> --new <file>` must print `OK`: no errors, no lost trigger, closest similarity lower than before. Then `TIDY apply <skill> --new <file>` (keeps a backup under `~/.skill-tidy/backups/`). Installed plugin copies are refused: edit the plugin's source repository and reinstall.
-6. Confirm with `TIDY conflicts` and report the before and after scores.
+6. Confirm with `TIDY conflicts` and report the before and after scores. Lexical scores are a proxy; for live routing evidence, google/skill-reach (`reach eval`, Apache-2.0, no release yet) probes real agents with prompts, an option to offer the user, not to install unasked.
 7. When rewording cannot separate two installed skills, say so: in a 2026 study of co-installed similar skills, install location decided the winner more than listing order, the conflict was settled at the first skill read, and the only mitigation tested was a hook at that first read (arXiv 2610.11647). Offer parking or disabling one (Step 3) before a hook; judge the result from transcripts, since the final reply rarely names the skill that ran.
 
 ## Step 3: save tokens
