@@ -14,8 +14,8 @@
   "topic": "Agent Skills description quality and selection conflicts, skill catalog listing budgets and token cost per host (Claude Code, Codex, Copilot, Cursor), and startup-context trimming",
   "tier": "fast",
   "interval_days": 6.22,
-  "last_checked": "2026-10-23",
-  "next_due": "2026-10-30",
+  "last_checked": "2026-10-30",
+  "next_due": "2026-11-05",
   "verify_at_use": false,
   "volatile_claims": [
     "Parking-lot design (inline index in always-read instruction files, groups of 8 or fewer) rests on one vendor eval (Vercel 2026-01-27) and routing research; no study tests an index line format",
@@ -47,12 +47,18 @@
       "m": 0.45,
       "interval_after": 6.22,
       "note": "refresh 2026-10-23: Cursor roots fixed in tidy.py, routing collapse 2610.18522, google/skill-reach pointed, Codex skills.max_context_tokens; T-20261023-1 4/4; cost: searches 8 · fetches 23 · tool calls 37 (+ about 20 inline)"
+    },
+    {
+      "date": "2026-10-30",
+      "m": 0.15,
+      "interval_after": 6.22,
+      "note": "quiet 2026-10-30: CC 2.1.309 <folder>:<name> for add-dir clashes, no budget change; cost: searches 1 · fetches 1 · tool calls 3"
     }
   ],
   "counts": {
     "learnings": 0,
     "changes": 4,
-    "research": 7,
+    "research": 8,
     "tests": 4
   },
   "consolidate_every": 25,

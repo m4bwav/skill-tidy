@@ -57,6 +57,13 @@ Best sources (primary first): the vendor docs above, the Agent Skills spec, arXi
 
 Newest first. `Track` is subject, tooling, practice, or testing.
 
+### R-20261030-1 · 2026-10-30 · Quiet: Claude Code 2.1.309 namespaces --add-dir name clashes
+- Summary: Claude Code 2.1.309 offers a skill in an `--add-dir` folder whose name is already taken as `<folder>:<name>` instead of making it unreachable; 2.1.312 fixed per-directory and `paths:` skills not found after a `cd`; 2.1.314 caps `~/.claude/skills/.trash`. No change to the listing budget or description limits in 2.1.282 to 2.1.314. Community posts on `skillListingBudgetFraction` repeat known facts. Tooling, practice, testing: nothing new.
+- Track: subject (tooling, practice, testing quiet)
+- Sources: https://raw.githubusercontent.com/anthropics/claude-code/main/CHANGELOG.md (checked 2026-10-30)
+- Magnitude: 0.15
+- Applied: none (RESEARCH.md only)
+
 ### R-20261023-1 · 2026-10-23 · Tooling and testing: google/skill-reach, a routing, collision and description-optimisation suite
 - Summary: google/skill-reach (Apache-2.0, "not an officially supported Google product", 290 commits, active 2026-10-10 to 10-18, 12 stars, no release, installed with uv): `reach overlap` (BM25 competition with `--suggest` rewrites), `reach eval` (live routing probes through claude-code, antigravity, goose and pi, or an offline keyword baseline), `reach optimize` (synthesised candidates ranked by recall gain, written only with `--auto-apply`), `reach lint` (frontmatter, 1,024 overflow, catalog-budget-overflow, duplicate-capability above 92% semantic overlap, missing-mutual-handoff, unbounded-attractor phrasing); static discovery for Claude Code, Codex, Cursor and Copilot. Its docs say overlap must be confirmed by probes, matching "lexical similarity is a proxy". No parking, `skillOverrides` or Codex config output. Also: `claude plugin eval` 2.1.299 adds `--disallow-tools` / `disallowed_tools` (keep Agent out so a subagent cannot hide the skill choice) and scores API-error runs 0 with exit 1. skill-guard (PyPI, embedding or LLM `conflict`) and erphq/skillcheck (Jaccard collisions) seen, undated. claude-skills-doctor still 0.7.0. Practice: no October threads; Gauge CLI (HN 2026-10-20) lists "a Skill goes unused even when it should help" as common.
 - Track: tooling, testing, practice
