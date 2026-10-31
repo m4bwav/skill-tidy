@@ -1,5 +1,7 @@
 # Handoff
 
+**Frozen 2026-10-30.** skill-tidy moved into tokenwright (m4bwav/tokenwright, skill `tokenwright-catalog`, since 0.2.0). Work continues there; start from that repo's ai-docs/HANDOFF.md. The text below is the state at the move.
+
 ## Current state
 skill-tidy 0.1.0: one evergreen skill (`skills/skill-tidy/`, tier fast, next due 2026-10-10) and the stdlib CLI `scripts/tidy.py` with lint (ST001-ST019), conflicts, check, apply, budget, usage, offload, startup, harvest. 11 unit tests pass (`python tests/test_tidy.py`); the skill's own description lints clean. Research basis in RESEARCH.md (R-20260926-1, -2), rules with evidence in `references/rules.md`.
 
