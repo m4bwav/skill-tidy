@@ -1,5 +1,7 @@
 # skill-tidy
 
+> **Moved to [tokenwright](https://github.com/m4bwav/tokenwright).** Since tokenwright 0.2.0 this skill ships there as `tokenwright-catalog`, with the same tidy.py commands (also reachable as `tw.py catalog`). This repository gets no more updates. To switch: uninstall skill-tidy, install tokenwright, then run `python <tokenwright>/skills/tokenwright-catalog/scripts/tidy.py parked index` once so the parked-skills index points at the new script. Parked skills and backups in `~/.skill-tidy` keep working.
+
 ![A neat craftsman's cabinet of many small labelled wooden drawers holding tools, a robot hand sorting tools into the right drawers, tidy and orderly](https://raw.githubusercontent.com/m4bwav/skill-tidy/master/.github/images/banner.jpg)
 
 Keep an AI agent's skill catalog cheap and unambiguous. Works with Agent Skills (`SKILL.md`) in Claude Code, Codex, GitHub Copilot and Cursor.

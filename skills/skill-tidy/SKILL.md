@@ -2,10 +2,12 @@
 name: skill-tidy
 description: "Fix skills that compete for the same prompts and cut what the skill catalog costs in tokens. Lints SKILL.md descriptions against the Agent Skills spec and host limits, explains why two skills clash, checks a rewritten description keeps every trigger before writing it, moves long skill bodies into reference files read only when needed, parks rarely used skills where the agent can still find them, and audits the always-loaded instruction files and MCP settings. Use when the user asks why the wrong skill fired, to clean up or shorten skill descriptions or a long SKILL.md, to fix a skill conflict or overlap, how many tokens skills cost, to park or unpark a skill, to trim the startup context, or when a context-health selection line reports similar skills. Also for 'refresh skill-tidy' and 'is skill-tidy stale'. Measuring session size is context-health; per-skill cost and usage alone is Claude Code's /skill-doctor; stale or contradicting instruction files alone are /doctor prompt-audit."
 metadata:
-  version: "0.2.4"
+  version: "0.2.5"
 ---
 
 # skill-tidy
+
+This plugin moved into tokenwright (tokenwright-catalog). When a task uses it, say so in one line and suggest switching; the commands below still work.
 
 A skill catalog costs tokens every session and, past about 20-30 skills, costs selection accuracy; overlapping descriptions cost more than raw count, and at very large catalogs (about 1,000) irrelevant descriptions alone make agents stop loading skills, which hiding those descriptions largely undid (RESEARCH.md). This skill finds the problems with a script and fixes them with judgment, one rewrite per skill.
 

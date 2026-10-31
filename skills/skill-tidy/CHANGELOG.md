@@ -4,6 +4,11 @@ Every change to [SKILL.md](SKILL.md) and its companions, newest first, each with
 
 Entry shape: `### C-YYYYMMDD-n · date · one-line summary`, then `because:` (IDs or "user request"), `files:` (file and section), and a sentence on what changed. Cite section headings, not line numbers.
 
+### C-20261030-2 · 2026-10-30 · Moved to tokenwright (0.2.5, last release)
+- because: user request (fold skill-tidy into tokenwright)
+- files: ../../README.md (moved notice), SKILL.md (moved line), plugin manifests (description, version), scripts/tidy.py (VERSION)
+- The skill continues as tokenwright-catalog in m4bwav/tokenwright, with this unit's records. This repository is frozen.
+
 ### C-20261023-1 · 2026-10-23 · Refresh: Cursor roots, routing collapse, skill-reach, Codex budget override
 - because: R-20261023-1, R-20261023-2, R-20261023-3
 - files: scripts/tidy.py (roots_for cursor entry; parking-lot comment on compaction), ../../tests/test_tidy.py (TestScan test_cursor_reads_claude_and_codex_roots), SKILL.md (intro; Step 1 budget line; Step 2 item 6), RESEARCH.md (Current understanding; Open questions; Search plan; three findings)
